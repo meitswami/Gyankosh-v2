@@ -14,6 +14,7 @@ import { exportExcelChatToDocx } from '@/lib/docxExport';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { Progress } from '@/components/ui/progress';
 import { useDocuments, type Document } from '@/hooks/useDocuments';
+import { buildExcelAiContext, estimateExcelAnalysisSeconds } from '@/lib/excelAiContext';
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/excel-search`;
 
@@ -83,6 +84,9 @@ export function ExcelSearchPanel({ onClose }: ExcelSearchPanelProps) {
   const [elapsedTime, setElapsedTime] = useState(0);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [showKnowledgeBase, setShowKnowledgeBase] = useState(true);
+  const [estimatedSeconds, setEstimatedSeconds] = useState<number | null>(null);
+  const [analysisStage, setAnalysisStage] = useState<'preparing' | 'requesting' | 'streaming'>('preparing');
+  const [timeToFirstToken, setTimeToFirstToken] = useState<number | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
@@ -139,6 +143,9 @@ export function ExcelSearchPanel({ onClose }: ExcelSearchPanelProps) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
       setIsLoading(false);
+      setAnalysisStage('preparing');
+      setEstimatedSeconds(null);
+      setTimeToFirstToken(null);
       toast({
         title: 'Analysis stopped',
         description: 'The analysis was cancelled',
@@ -243,6 +250,10 @@ export function ExcelSearchPanel({ onClose }: ExcelSearchPanelProps) {
     // Create abort controller for this request
     abortControllerRef.current = new AbortController();
 
+    // Reset per-request UI state
+    setAnalysisStage('preparing');
+    setTimeToFirstToken(null);
+
     const userMessage: ExcelMessage = {
       id: crypto.randomUUID(),
       role: 'user',
@@ -271,6 +282,22 @@ export function ExcelSearchPanel({ onClose }: ExcelSearchPanelProps) {
       const vizKeywords = ['chart', 'graph', 'visualize', 'plot', 'diagram', 'bar', 'line', 'pie'];
       const wantsViz = vizKeywords.some(kw => input.toLowerCase().includes(kw));
 
+      // Build a compact context (major speed improvement vs sending the entire workbook)
+      const excelContext = buildExcelAiContext({
+        excel,
+        query: input,
+        searchResults,
+      });
+
+      const eta = estimateExcelAnalysisSeconds({
+        contextChars: excelContext.length,
+        sheetCount: excel.sheets.length,
+      });
+      setEstimatedSeconds(eta);
+      setAnalysisStage('requesting');
+
+      const requestStart = performance.now();
+
       const response = await fetch(CHAT_URL, {
         method: 'POST',
         headers: {
@@ -279,7 +306,7 @@ export function ExcelSearchPanel({ onClose }: ExcelSearchPanelProps) {
         },
         body: JSON.stringify({
           query: input,
-          excelContent: excel.searchableContent,
+          excelContent: excelContext,
           excelMeta: {
             fileName: excel.fileName,
             sheets: excel.sheets.map(s => ({
@@ -307,6 +334,9 @@ export function ExcelSearchPanel({ onClose }: ExcelSearchPanelProps) {
       const decoder = new TextDecoder();
       let fullResponse = '';
       let assistantId = crypto.randomUUID();
+      let buffer = '';
+      let sawDone = false;
+      let firstTokenSeen = false;
 
       // Add empty assistant message
       setMessages(prev => [...prev, {
@@ -320,26 +350,58 @@ export function ExcelSearchPanel({ onClose }: ExcelSearchPanelProps) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n');
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split('\n');
+        buffer = parts.pop() ?? '';
 
-        for (const line of lines) {
-          if (line.startsWith('data: ') && line !== 'data: [DONE]') {
-            try {
-              const data = JSON.parse(line.slice(6));
-              const content = data.choices?.[0]?.delta?.content;
-              if (content) {
-                fullResponse += content;
-                setMessages(prev => prev.map(m => 
-                  m.id === assistantId 
-                    ? { ...m, content: fullResponse }
-                    : m
-                ));
-              }
-            } catch {
-              // Skip invalid JSON
-            }
+        for (const raw of parts) {
+          const line = raw.trim();
+          if (!line) continue;
+
+          if (line === 'data: [DONE]') {
+            sawDone = true;
+            break;
           }
+
+          if (!line.startsWith('data: ')) continue;
+
+          try {
+            const data = JSON.parse(line.slice(6));
+
+            const finishReason = data.choices?.[0]?.finish_reason;
+            if (finishReason) {
+              sawDone = true;
+            }
+
+            const content = data.choices?.[0]?.delta?.content;
+            if (content) {
+              if (!firstTokenSeen) {
+                firstTokenSeen = true;
+                setAnalysisStage('streaming');
+                setTimeToFirstToken(Math.round((performance.now() - requestStart) / 100) / 10);
+              }
+
+              fullResponse += content;
+              setMessages(prev => prev.map(m =>
+                m.id === assistantId
+                  ? { ...m, content: fullResponse }
+                  : m
+              ));
+            }
+          } catch {
+            // ignore malformed chunk
+          }
+
+          if (sawDone) break;
+        }
+
+        if (sawDone) {
+          try {
+            await reader.cancel();
+          } catch {
+            // ignore
+          }
+          break;
         }
       }
 
@@ -379,6 +441,7 @@ export function ExcelSearchPanel({ onClose }: ExcelSearchPanelProps) {
     } finally {
       setIsLoading(false);
       abortControllerRef.current = null;
+      setAnalysisStage('preparing');
     }
   }, [input, excel, isLoading]);
 
@@ -614,10 +677,23 @@ export function ExcelSearchPanel({ onClose }: ExcelSearchPanelProps) {
                           <div className="flex items-center gap-2">
                             <Loader2 className="w-4 h-4 animate-spin text-primary" />
                             <div>
-                              <span className="text-sm font-medium">Analyzing...</span>
+                              <span className="text-sm font-medium">
+                                {analysisStage === 'requesting' ? 'Contacting AI…' : 'Analyzing…'}
+                              </span>
                               <p className="text-xs text-muted-foreground">
-                                {elapsedTime}s elapsed • Est. 10-30s for complex queries
+                                {elapsedTime}s elapsed
+                                {estimatedSeconds != null && (
+                                  <> • ETA ~{Math.max(0, estimatedSeconds - elapsedTime)}s</>
+                                )}
+                                {timeToFirstToken != null && (
+                                  <> • First response in {timeToFirstToken}s</>
+                                )}
                               </p>
+                              {estimatedSeconds != null && elapsedTime > estimatedSeconds * 3 && (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  Still running (not stuck) — it's waiting on the AI service. You can press Stop anytime.
+                                </p>
+                              )}
                             </div>
                           </div>
                           <Button 
@@ -630,7 +706,14 @@ export function ExcelSearchPanel({ onClose }: ExcelSearchPanelProps) {
                             Stop
                           </Button>
                         </div>
-                        <Progress value={Math.min(elapsedTime * 3.3, 95)} className="mt-2 h-1" />
+                        <Progress
+                          value={
+                            estimatedSeconds != null
+                              ? Math.min((elapsedTime / Math.max(1, estimatedSeconds)) * 100, 95)
+                              : Math.min(elapsedTime * 3.3, 95)
+                          }
+                          className="mt-2 h-1"
+                        />
                       </div>
                     </div>
                   )}
