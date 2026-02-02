@@ -1,0 +1,16 @@
+project_id = "cmpmkxfncwhpljnnvqfr"
+
+[functions.parse-document]
+verify_jwt = false
+
+[functions.chat-with-document]
+verify_jwt = false
+
+[functions.generate-embedding]
+verify_jwt = false
+
+[functions.excel-search]
+verify_jwt = false
+
+[functions.web-search]
+verify_jwt = false
