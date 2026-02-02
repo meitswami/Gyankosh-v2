@@ -10,9 +10,13 @@ export function useAuth() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    let mounted = true;
+
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
+        if (!mounted) return;
+        
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
@@ -24,18 +28,42 @@ export function useAuth() {
       }
     );
 
-    // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
+    // THEN check for existing session with error handling
+    const initSession = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (!mounted) return;
+        
+        if (error) {
+          console.error('Error getting session:', error);
+          setLoading(false);
+          navigate('/auth');
+          return;
+        }
 
-      if (!session) {
-        navigate('/auth');
+        setSession(session);
+        setUser(session?.user ?? null);
+        setLoading(false);
+
+        if (!session) {
+          navigate('/auth');
+        }
+      } catch (error) {
+        console.error('Session init error:', error);
+        if (mounted) {
+          setLoading(false);
+          navigate('/auth');
+        }
       }
-    });
+    };
 
-    return () => subscription.unsubscribe();
+    initSession();
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, [navigate]);
 
   const signUp = useCallback(async (email: string, password: string) => {
@@ -60,10 +88,25 @@ export function useAuth() {
   }, []);
 
   const logout = useCallback(async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    setSession(null);
-    navigate('/auth');
+    try {
+      // Clear state first
+      setUser(null);
+      setSession(null);
+      
+      // Clear any localStorage flags
+      localStorage.removeItem('gyaankosh_logged_in');
+      localStorage.removeItem('gyaankosh_user');
+      localStorage.removeItem('privateKey');
+      
+      // Then sign out
+      await supabase.auth.signOut();
+      
+      navigate('/auth');
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Force navigate even if signOut fails
+      navigate('/auth');
+    }
   }, [navigate]);
 
   return { 
