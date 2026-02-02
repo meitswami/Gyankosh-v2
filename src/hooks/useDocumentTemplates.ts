@@ -8,10 +8,12 @@ export interface DocumentTemplate {
   category: string;
   subcategory: string | null;
   description: string | null;
-  template_content: string;
-  icon: string;
-  is_system: boolean;
+  content: string;
+  icon: string | null;
+  is_public: boolean;
+  user_id: string | null;
   created_at: string;
+  updated_at: string;
 }
 
 interface TemplateContext {
@@ -29,7 +31,7 @@ export function useDocumentTemplates() {
       const { data, error } = await supabase
         .from('document_templates')
         .select('*')
-        .eq('is_system', true)
+        .eq('is_public', true)
         .order('category', { ascending: true });
 
       if (error) throw error;
@@ -67,7 +69,7 @@ export function useDocumentTemplates() {
     context: TemplateContext,
     customFields?: Record<string, string>
   ) => {
-    let content = template.template_content;
+    let content = template.content;
     const today = new Date();
     
     // Standard replacements

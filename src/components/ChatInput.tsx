@@ -201,7 +201,7 @@ export function ChatInput({
           id: i.id,
           label: i.name,
           sublabel: i.description || i.base_url,
-          icon: i.icon,
+          icon: '🔌',
         }));
 
       const searchEngines: MentionSuggestion[] = [

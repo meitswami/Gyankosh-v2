@@ -74,7 +74,7 @@ export function DocumentShare({ document, onClose }: DocumentShareProps) {
         .from('shared_documents')
         .insert({
           document_id: document.id,
-          user_id: user.id,
+          share_token: crypto.randomUUID(),
           expires_at,
         })
         .select('share_token, expires_at')

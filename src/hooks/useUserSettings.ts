@@ -1,6 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { useState, useCallback } from 'react';
 import { useToast } from '@/hooks/use-toast';
+
+// User settings and signatures are not yet implemented in the database
+// This hook provides a stub implementation with localStorage fallback
 
 export interface UserSettings {
   id: string;
@@ -26,69 +28,46 @@ export interface UserSignature {
   updated_at: string;
 }
 
+const LOCAL_STORAGE_KEY = 'user_settings';
+const LOCAL_SIGNATURES_KEY = 'user_signatures';
+
 export function useUserSettings(userId: string | null) {
-  const [settings, setSettings] = useState<UserSettings | null>(null);
-  const [signatures, setSignatures] = useState<UserSignature[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [settings, setSettings] = useState<UserSettings | null>(() => {
+    if (!userId) return null;
+    const stored = localStorage.getItem(`${LOCAL_STORAGE_KEY}_${userId}`);
+    return stored ? JSON.parse(stored) : null;
+  });
+  
+  const [signatures, setSignatures] = useState<UserSignature[]>(() => {
+    if (!userId) return [];
+    const stored = localStorage.getItem(`${LOCAL_SIGNATURES_KEY}_${userId}`);
+    return stored ? JSON.parse(stored) : [];
+  });
+  
+  const [loading] = useState(false);
   const { toast } = useToast();
-
-  const fetchSettings = useCallback(async () => {
-    if (!userId) return;
-    
-    try {
-      // Fetch settings
-      const { data: settingsData, error: settingsError } = await supabase
-        .from('user_settings')
-        .select('*')
-        .eq('user_id', userId)
-        .single();
-
-      if (settingsError && settingsError.code !== 'PGRST116') {
-        throw settingsError;
-      }
-
-      setSettings(settingsData as UserSettings | null);
-
-      // Fetch signatures
-      const { data: signaturesData, error: signaturesError } = await supabase
-        .from('user_signatures')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: true });
-
-      if (signaturesError) throw signaturesError;
-      setSignatures((signaturesData || []) as UserSignature[]);
-    } catch (error) {
-      console.error('Error fetching user settings:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [userId]);
-
-  useEffect(() => {
-    fetchSettings();
-  }, [fetchSettings]);
 
   const updateSettings = useCallback(async (updates: Partial<UserSettings>) => {
     if (!userId) return false;
 
     try {
-      if (settings) {
-        // Update existing
-        const { error } = await supabase
-          .from('user_settings')
-          .update(updates)
-          .eq('user_id', userId);
-        if (error) throw error;
-      } else {
-        // Insert new
-        const { error } = await supabase
-          .from('user_settings')
-          .insert({ user_id: userId, ...updates });
-        if (error) throw error;
-      }
-
-      await fetchSettings();
+      const newSettings: UserSettings = {
+        id: userId,
+        user_id: userId,
+        first_name: null,
+        last_name: null,
+        designation: null,
+        company: null,
+        phone: null,
+        logo_url: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        ...settings,
+        ...updates,
+      };
+      
+      localStorage.setItem(`${LOCAL_STORAGE_KEY}_${userId}`, JSON.stringify(newSettings));
+      setSettings(newSettings);
       toast({ title: 'Settings saved' });
       return true;
     } catch (error) {
@@ -96,25 +75,28 @@ export function useUserSettings(userId: string | null) {
       toast({ title: 'Failed to save settings', variant: 'destructive' });
       return false;
     }
-  }, [userId, settings, fetchSettings, toast]);
+  }, [userId, settings, toast]);
 
   const addSignature = useCallback(async (signature: Omit<UserSignature, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => {
     if (!userId) return false;
 
-    // Check limit
     if (signatures.length >= 3) {
       toast({ title: 'Maximum 3 signatures allowed', variant: 'destructive' });
       return false;
     }
 
     try {
-      const { error } = await supabase
-        .from('user_signatures')
-        .insert({ user_id: userId, ...signature });
-
-      if (error) throw error;
-
-      await fetchSettings();
+      const newSig: UserSignature = {
+        id: crypto.randomUUID(),
+        user_id: userId,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        ...signature,
+      };
+      
+      const newSignatures = [...signatures, newSig];
+      localStorage.setItem(`${LOCAL_SIGNATURES_KEY}_${userId}`, JSON.stringify(newSignatures));
+      setSignatures(newSignatures);
       toast({ title: 'Signature added' });
       return true;
     } catch (error) {
@@ -122,21 +104,17 @@ export function useUserSettings(userId: string | null) {
       toast({ title: 'Failed to add signature', variant: 'destructive' });
       return false;
     }
-  }, [userId, signatures.length, fetchSettings, toast]);
+  }, [userId, signatures, toast]);
 
   const updateSignature = useCallback(async (id: string, updates: Partial<UserSignature>) => {
     if (!userId) return false;
 
     try {
-      const { error } = await supabase
-        .from('user_signatures')
-        .update(updates)
-        .eq('id', id)
-        .eq('user_id', userId);
-
-      if (error) throw error;
-
-      await fetchSettings();
+      const newSignatures = signatures.map(s => 
+        s.id === id ? { ...s, ...updates, updated_at: new Date().toISOString() } : s
+      );
+      localStorage.setItem(`${LOCAL_SIGNATURES_KEY}_${userId}`, JSON.stringify(newSignatures));
+      setSignatures(newSignatures);
       toast({ title: 'Signature updated' });
       return true;
     } catch (error) {
@@ -144,21 +122,15 @@ export function useUserSettings(userId: string | null) {
       toast({ title: 'Failed to update signature', variant: 'destructive' });
       return false;
     }
-  }, [userId, fetchSettings, toast]);
+  }, [userId, signatures, toast]);
 
   const deleteSignature = useCallback(async (id: string) => {
     if (!userId) return false;
 
     try {
-      const { error } = await supabase
-        .from('user_signatures')
-        .delete()
-        .eq('id', id)
-        .eq('user_id', userId);
-
-      if (error) throw error;
-
-      await fetchSettings();
+      const newSignatures = signatures.filter(s => s.id !== id);
+      localStorage.setItem(`${LOCAL_SIGNATURES_KEY}_${userId}`, JSON.stringify(newSignatures));
+      setSignatures(newSignatures);
       toast({ title: 'Signature deleted' });
       return true;
     } catch (error) {
@@ -166,62 +138,31 @@ export function useUserSettings(userId: string | null) {
       toast({ title: 'Failed to delete signature', variant: 'destructive' });
       return false;
     }
-  }, [userId, fetchSettings, toast]);
+  }, [userId, signatures, toast]);
 
   const setDefaultSignature = useCallback(async (id: string) => {
     if (!userId) return false;
 
     try {
-      // First, unset all defaults
-      await supabase
-        .from('user_signatures')
-        .update({ is_default: false })
-        .eq('user_id', userId);
-
-      // Set the selected one as default
-      const { error } = await supabase
-        .from('user_signatures')
-        .update({ is_default: true })
-        .eq('id', id)
-        .eq('user_id', userId);
-
-      if (error) throw error;
-
-      await fetchSettings();
+      const newSignatures = signatures.map(s => ({
+        ...s,
+        is_default: s.id === id,
+        updated_at: new Date().toISOString(),
+      }));
+      localStorage.setItem(`${LOCAL_SIGNATURES_KEY}_${userId}`, JSON.stringify(newSignatures));
+      setSignatures(newSignatures);
       return true;
     } catch (error) {
       console.error('Error setting default signature:', error);
       return false;
     }
-  }, [userId, fetchSettings]);
+  }, [userId, signatures]);
 
-  const uploadLogo = useCallback(async (file: File) => {
-    if (!userId) return null;
+  const uploadLogo = useCallback(async (_file: File) => {
+    toast({ title: 'Logo upload feature coming soon', variant: 'destructive' });
+    return null;
+  }, [toast]);
 
-    try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${userId}/logo.${fileExt}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('documents')
-        .upload(fileName, file, { upsert: true });
-
-      if (uploadError) throw uploadError;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('documents')
-        .getPublicUrl(fileName);
-
-      await updateSettings({ logo_url: publicUrl });
-      return publicUrl;
-    } catch (error) {
-      console.error('Error uploading logo:', error);
-      toast({ title: 'Failed to upload logo', variant: 'destructive' });
-      return null;
-    }
-  }, [userId, updateSettings, toast]);
-
-  // Get formatted signature for templates
   const getFormattedSignature = useCallback((type?: 'formal' | 'semi-formal' | 'casual') => {
     let sig = signatures.find(s => s.is_default);
     if (type) {
@@ -233,7 +174,6 @@ export function useUserSettings(userId: string | null) {
 
     if (sig) return sig.content;
 
-    // Default signature from settings
     const name = [settings?.first_name, settings?.last_name].filter(Boolean).join(' ') || 'Your Name';
     const parts = ['Warm Regards,', name];
     if (settings?.designation) parts.push(settings.designation);
@@ -253,6 +193,6 @@ export function useUserSettings(userId: string | null) {
     setDefaultSignature,
     uploadLogo,
     getFormattedSignature,
-    refetch: fetchSettings,
+    refetch: () => Promise.resolve(),
   };
 }

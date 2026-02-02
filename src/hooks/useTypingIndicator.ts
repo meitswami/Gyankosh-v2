@@ -31,7 +31,8 @@ export function useTypingIndicator(currentUserId: string | null, recipientId: st
         .upsert({
           user_id: currentUserId,
           recipient_id: recipientId,
-          started_at: new Date().toISOString(),
+          is_typing: true,
+          updated_at: new Date().toISOString(),
         }, {
           onConflict: 'user_id,recipient_id',
         });
@@ -86,10 +87,10 @@ export function useTypingIndicator(currentUserId: string | null, recipientId: st
         .single();
 
       if (data) {
-        const startedAt = new Date(data.started_at);
+        const updatedAt = new Date(data.updated_at);
         const now = new Date();
-        // Only show if started within last 5 seconds
-        setFriendIsTyping(now.getTime() - startedAt.getTime() < 5000);
+        // Only show if updated within last 5 seconds
+        setFriendIsTyping(data.is_typing && now.getTime() - updatedAt.getTime() < 5000);
       }
     };
 
