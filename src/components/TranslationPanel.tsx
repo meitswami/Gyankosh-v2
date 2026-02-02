@@ -44,9 +44,11 @@ export function TranslationPanel({ initialText = '', onClose }: TranslationPanel
       abortControllerRef.current = null;
     }
     if (readerRef.current) {
-      readerRef.current.releaseLock().catch(() => {
+      try {
+        readerRef.current.releaseLock();
+      } catch {
         // Ignore errors when releasing lock
-      });
+      }
       readerRef.current = null;
     }
     if (timeoutRef.current) {
