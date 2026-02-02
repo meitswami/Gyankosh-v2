@@ -72,7 +72,7 @@ export default function Auth() {
     } else {
       toast({
         title: 'स्वागतम् 🙏',
-        description: 'Welcome to ज्ञानकोष',
+        description: 'Welcome to ज्ञानकोष 2.0',
       });
       navigate('/');
     }
@@ -110,7 +110,7 @@ export default function Auth() {
     } else {
       toast({
         title: 'Account Created! 🎉',
-        description: 'Welcome to ज्ञानकोष. You are now logged in.',
+        description: 'Welcome to ज्ञानकोष 2.0. You are now logged in.',
       });
       navigate('/');
     }
@@ -126,7 +126,7 @@ export default function Auth() {
             <BookOpen className="w-8 h-8 text-primary" />
           </div>
           <div>
-            <CardTitle className="text-3xl font-bold text-primary">ज्ञानकोष</CardTitle>
+            <CardTitle className="text-3xl font-bold text-primary">ज्ञानकोष 2.0</CardTitle>
             <CardDescription className="text-muted-foreground mt-1">
               Treasury of Knowledge
             </CardDescription>

@@ -51,10 +51,10 @@ export function ChatArea({ messages, isLoading, hasDocuments = false, onSendMess
             <span className="text-4xl">📚</span>
           </div>
           <h2 className="text-2xl font-semibold text-foreground mb-2">
-            ज्ञानकोष में स्वागत है
+            ज्ञानकोष 2.0 में स्वागत है
           </h2>
           <p className="text-muted-foreground mb-6">
-            Welcome to Gyaankosh - Your AI-powered assistant
+            Welcome to Gyaankosh 2.0 - Your AI-powered assistant (now with advanced Video and Audio Understanding)
           </p>
           <div className="space-y-3 text-sm text-muted-foreground">
             <div className="flex items-center gap-3 bg-primary/10 rounded-lg p-3 border border-primary/20">

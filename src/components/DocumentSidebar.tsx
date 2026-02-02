@@ -82,7 +82,7 @@ export function DocumentSidebar({
             <BookOpen className="w-5 h-5 text-primary" />
           </div>
           <div>
-            <h1 className="font-semibold text-lg text-sidebar-foreground">ज्ञानकोष</h1>
+            <h1 className="font-semibold text-lg text-sidebar-foreground">ज्ञानकोष 2.0</h1>
             <p className="text-xs text-muted-foreground">Knowledge Treasury</p>
           </div>
         </div>

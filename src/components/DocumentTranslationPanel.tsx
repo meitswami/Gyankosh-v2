@@ -304,7 +304,7 @@ export function DocumentTranslationPanel({ onClose }: DocumentTranslationPanelPr
         new Paragraph({
           children: [
             new TextRun({
-              text: `Translated by Gyankosh on ${new Date().toLocaleDateString()}`,
+              text: `Translated by Gyankosh 2.0 on ${new Date().toLocaleDateString()}`,
               size: 20,
               color: '666666',
               italics: true,

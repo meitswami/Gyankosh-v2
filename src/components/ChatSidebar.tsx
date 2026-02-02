@@ -81,7 +81,7 @@ export function ChatSidebar({
     try {
       const result = await Swal.fire({
         title: 'Logout Confirmation',
-        text: 'Are you sure you want to logout from ज्ञानकोष?',
+        text: 'Are you sure you want to logout from ज्ञानकोष 2.0?',
         icon: 'question',
         showCancelButton: true,
         confirmButtonColor: '#f97316',
@@ -134,7 +134,7 @@ export function ChatSidebar({
               <BookOpen className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h1 className="font-semibold text-lg text-sidebar-foreground">ज्ञानकोष</h1>
+              <h1 className="font-semibold text-lg text-sidebar-foreground">ज्ञानकोष 2.0</h1>
               <p className="text-[10px] text-muted-foreground/60">Treasury of Knowledge</p>
             </div>
           </div>
@@ -347,7 +347,7 @@ export function ChatSidebar({
           Type <span className="font-mono bg-muted px-1 py-0.5 rounded">#</span> to reference documents
         </p>
         <p className="text-[10px] text-muted-foreground/50 text-center">
-          Gyankosh supports Hindi, English & Hinglish
+          Gyankosh 2.0 supports Hindi, English & Hinglish
         </p>
       </div>
 

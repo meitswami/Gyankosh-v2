@@ -293,7 +293,7 @@ export function MessageDocxExport({ content, documentName }: MessageDocxExportPr
         new Paragraph({
           children: [
             new TextRun({
-              text: 'Exported from ज्ञानकोष (Gyaankosh)',
+              text: 'Exported from ज्ञानकोष 2.0 (Gyaankosh 2.0)',
               size: 18,
               color: '999999',
             }),

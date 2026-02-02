@@ -67,7 +67,7 @@ export function useChat() {
         console.log('Using Local AI (Ollama)...');
         ollama.setBaseUrl(appSettings.local_ai.ollama_url);
 
-        let systemPrompt = "You are GenX AI Gyankosh, a helpful assistant.";
+        let systemPrompt = "You are GenX AI Gyankosh 2.0, a helpful assistant.";
         if (document?.content_text) {
           systemPrompt += `\n\nContext from document "${document.alias}":\n${document.content_text.slice(0, 8000)}`;
         }
