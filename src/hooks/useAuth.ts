@@ -12,24 +12,40 @@ export function useAuth() {
   useEffect(() => {
     let mounted = true;
 
-    // Use onAuthStateChange as the single source of truth
-    // INITIAL_SESSION fires on page load with the existing session (if any)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+    // Listener for ongoing auth changes (does NOT control initial loading)
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!mounted) return;
+
+      setSession(session);
+      setUser(session?.user ?? null);
+
+      if (event === 'SIGNED_OUT') {
+        navigate('/auth');
+      }
+    });
+
+    // Initial load (controls loading state)
+    const initializeAuth = async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
         if (!mounted) return;
-        
+
         setSession(session);
         setUser(session?.user ?? null);
-        setLoading(false);
 
-        // Redirect to auth if signed out or no session on initial load
-        if (event === 'SIGNED_OUT') {
-          navigate('/auth');
-        } else if (event === 'INITIAL_SESSION' && !session) {
+        if (!session) {
           navigate('/auth');
         }
+      } finally {
+        if (mounted) setLoading(false);
       }
-    );
+    };
+
+    initializeAuth();
 
     return () => {
       mounted = false;
