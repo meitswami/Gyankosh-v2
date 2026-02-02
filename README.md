@@ -1,10 +1,10 @@
-# ज्ञानकोष (Gyaankosh) - AI Document Knowledge Base
+# ज्ञानकोष 2.0 (Gyaankosh 2.0) - AI Document Knowledge Base
 
-**ज्ञानकोष** (Gyaankosh, meaning "Treasury of Knowledge") is an AI-powered document knowledge base that lets you upload documents and interact with them using natural language in Hindi, English, or Hinglish. Features end-to-end encrypted messaging, smart mentions, RBAC, and enterprise-grade security.
+**ज्ञानकोष 2.0** (Gyaankosh 2.0, meaning "Treasury of Knowledge") is an AI-powered document knowledge base (now with advanced processing of Video and Audio Understanding feature) that lets you upload documents and interact with them using natural language in Hindi, English, or Hinglish. Features end-to-end encrypted messaging, smart mentions, RBAC, and enterprise-grade security.
 
-## 🆚 ChatGPT vs Gyaankosh Comparison
+## 🆚 ChatGPT vs Gyaankosh 2.0 Comparison
 
-| Feature | ChatGPT | Gyaankosh |
+| Feature | ChatGPT | Gyaankosh 2.0 |
 |---------|---------|-----------|
 | **Document Upload** | ✅ Limited (paid) | ✅ Unlimited (PDF, DOCX, Images, Videos) |
 | **Knowledge Base** | ❌ No persistent storage | ✅ Personal document library with semantic search |
@@ -26,18 +26,20 @@
 | **Onboarding Tour** | ❌ Not available | ✅ Interactive walkthrough |
 | **Usage Limits** | Fixed plans | ✅ Configurable per organization |
 | **Self-Hosted Option** | ❌ Not available | ✅ Full control |
+| **Video & Audio Processing** | ❌ Limited | ✅ Advanced understanding & transcription |
 | **Pricing** | $20/month+ | Free / Self-hosted |
 
 ## ✨ Features
 
 ### 📚 Document Management
-- **Multi-Format Upload**: PDF, DOCX, DOC, TXT, images (JPG, PNG, WebP), videos (MP4, WebM, MOV)
+- **Multi-Format Upload**: PDF, DOCX, DOC, TXT, images (JPG, PNG, WebP), videos (MP4, WebM, MOV), audio files
 - **📦 Batch Upload**: Multiple files with queue management (3 concurrent)
 - **🔍 Advanced OCR**: Extract text from scanned documents with multilingual support
 - **🏷️ AI-Generated Tags**: Automatic categorization and tagging
 - **📊 Document Comparison**: Side-by-side AI analysis
 - **🔗 Sharing**: Public links with view tracking
 - **🌐 Whole Document Translation**: Translate entire documents (PDF, DOCX, etc.) while preserving formatting, layout, and indentation. Download as Word (.docx) ready for copy-paste
+- **🎥 Video & Audio Understanding**: Advanced processing for multimedia content with transcription and AI analysis
 
 ### 💬 AI Chat & Smart Mentions
 - **🌐 Global Search**: Query across entire knowledge base
@@ -135,7 +137,7 @@ Type these triggers in the chat input:
 ```sh
 # Clone and install
 git clone <YOUR_GIT_URL>
-cd gyaankosh
+cd gyaankosh-2.0
 npm install
 npm run dev
 ```
@@ -206,6 +208,11 @@ Only the admin user (test@genxai.com) can access the Admin tab in Settings:
 - **Audit Logs**: Complete activity tracking
 
 ## 🆕 Recent Updates
+
+### Version 2.0 - Video & Audio Understanding
+- **Advanced Video Processing**: Upload and analyze video content with AI-powered understanding
+- **Audio Transcription**: Automatic speech-to-text for audio files
+- **Multimedia Knowledge Base**: Include video and audio files in your document library
 
 ### Bug Fixes & Improvements
 - **Fixed Language Tools Loading Issue**: Resolved stuck loading state in Translate, Paraphrase, and Grammar functions. Added proper request cancellation, timeout handling, and resource cleanup to prevent memory leaks.

@@ -16,8 +16,8 @@ interface TourStep {
 const tourSteps: TourStep[] = [
   {
     id: 'welcome',
-    title: 'Welcome to ज्ञानकोष!',
-    description: 'Your AI-powered document knowledge base. Let\'s walk through the key features to get you started.',
+    title: 'Welcome to ज्ञानकोष 2.0!',
+    description: 'Your AI-powered document knowledge base (now with advanced Video and Audio Understanding). Let\'s walk through the key features to get you started.',
     icon: <Sparkles className="w-8 h-8 text-primary" />,
     tips: [
       'Upload documents to build your knowledge base',

@@ -53,7 +53,7 @@ export function ChatExport({ messages, sessionId, sessionTitle }: ChatExportProp
     });
     
     let md = `# ${title}\n\n`;
-    md += `*Exported from Gyankosh on ${date}*\n\n---\n\n`;
+    md += `*Exported from Gyankosh 2.0 on ${date}*\n\n---\n\n`;
     
     messages.forEach((msg) => {
       const role = msg.role === 'user' ? '👤 **You**' : '🤖 **Assistant**';
@@ -107,7 +107,7 @@ export function ChatExport({ messages, sessionId, sessionTitle }: ChatExportProp
     // Date
     doc.setFontSize(10);
     doc.setFont('helvetica', 'italic');
-    doc.text(`Exported from Gyankosh on ${new Date().toLocaleDateString('en-IN')}`, margin, yPos);
+    doc.text(`Exported from Gyankosh 2.0 on ${new Date().toLocaleDateString('en-IN')}`, margin, yPos);
     yPos += 15;
     
     // Messages

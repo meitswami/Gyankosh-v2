@@ -106,7 +106,7 @@ export default function SharedDocument() {
           <Button asChild>
             <Link to="/">
               <ArrowLeft className="w-4 h-4 mr-2" />
-              Go to Gyankosh
+              Go to Gyankosh 2.0
             </Link>
           </Button>
         </div>
@@ -133,7 +133,7 @@ export default function SharedDocument() {
           </div>
           <Button variant="outline" size="sm" asChild>
             <Link to="/">
-              Try Gyankosh
+              Try Gyankosh 2.0
             </Link>
           </Button>
         </div>
@@ -191,7 +191,7 @@ export default function SharedDocument() {
         <p className="text-center text-xs text-muted-foreground">
           This is a shared document from{' '}
           <Link to="/" className="text-primary hover:underline font-medium">
-            Gyankosh - ज्ञानकोष
+            Gyankosh 2.0 - ज्ञानकोष 2.0
           </Link>
         </p>
       </footer>

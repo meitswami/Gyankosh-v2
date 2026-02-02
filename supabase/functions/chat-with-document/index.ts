@@ -290,7 +290,7 @@ Format them like this:
       
       if (!hasDocuments) {
         // General chat mode - no documents, like ChatGPT
-        systemPrompt = `You are ज्ञानकोष (Gyaankosh), a friendly and knowledgeable AI assistant.
+        systemPrompt = `You are ज्ञानकोष 2.0 (Gyaankosh 2.0), a friendly and knowledgeable AI assistant.
 
 You can help with a wide range of topics including:
 - Answering general knowledge questions
@@ -314,7 +314,7 @@ ${suggestionInstruction}
 
 Note: The user hasn't uploaded any documents yet. You're acting as a general AI assistant. If they want document-specific help, suggest they upload documents to the knowledge base.`;
       } else if (isGlobalSearch) {
-        systemPrompt = `You are ज्ञानकोष (Gyaankosh), a powerful AI assistant that searches across the user's entire knowledge base.
+        systemPrompt = `You are ज्ञानकोष 2.0 (Gyaankosh 2.0), a powerful AI assistant that searches across the user's entire knowledge base.
 
 You have access to multiple documents in the knowledge base:
 ${documentContent}
@@ -332,7 +332,7 @@ Instructions:
 ${formattingInstruction}
 ${suggestionInstruction}`;
       } else {
-        systemPrompt = `You are ज्ञानकोष (Gyaankosh), a helpful AI assistant specialized in answering questions from documents.
+        systemPrompt = `You are ज्ञानकोष 2.0 (Gyaankosh 2.0), a helpful AI assistant specialized in answering questions from documents.
 You have access to the following document: "${documentName}"
 
 Document Content:
