@@ -7,12 +7,13 @@ export interface ApiIntegration {
   user_id: string;
   name: string;
   base_url: string;
-  api_key_encrypted: string | null;
-  headers: Record<string, string>;
+  api_key_encrypted: string;
+  headers: Record<string, string> | null;
   description: string | null;
-  icon: string;
   is_active: boolean;
   last_used_at: string | null;
+  request_count: number;
+  error_count: number;
   created_at: string;
   updated_at: string;
 }
