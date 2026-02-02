@@ -124,6 +124,78 @@ export function ChatSidebar({
     }
   };
 
+  const handleDeleteChat = async (e: React.MouseEvent, sessionId: string, sessionTitle: string) => {
+    e.stopPropagation();
+    
+    try {
+      const result = await Swal.fire({
+        title: 'Delete Chat?',
+        html: `<p>Are you sure you want to delete this chat?</p><p class="text-sm text-gray-500 mt-2">"${sessionTitle.slice(0, 50)}${sessionTitle.length > 50 ? '...' : ''}"</p>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: 'Yes, Delete',
+        cancelButtonText: 'Cancel',
+        background: '#ffffff',
+        color: '#1f2937',
+      });
+
+      if (result.isConfirmed) {
+        onDeleteSession(sessionId);
+        
+        await Swal.fire({
+          title: 'Deleted!',
+          text: 'Chat has been deleted successfully.',
+          icon: 'success',
+          timer: 1500,
+          showConfirmButton: false,
+          background: '#ffffff',
+          color: '#1f2937',
+        });
+      }
+    } catch (error) {
+      console.error('Delete chat error:', error);
+      onDeleteSession(sessionId);
+    }
+  };
+
+  const handleDeleteDocument = async (e: React.MouseEvent, docId: string, docName: string) => {
+    e.stopPropagation();
+    
+    try {
+      const result = await Swal.fire({
+        title: 'Delete Document?',
+        html: `<p>Are you sure you want to delete this document from Knowledge Base?</p><p class="text-sm text-gray-500 mt-2">"${docName.slice(0, 50)}${docName.length > 50 ? '...' : ''}"</p>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: 'Yes, Delete',
+        cancelButtonText: 'Cancel',
+        background: '#ffffff',
+        color: '#1f2937',
+      });
+
+      if (result.isConfirmed) {
+        onDeleteDocument(docId);
+        
+        await Swal.fire({
+          title: 'Deleted!',
+          text: 'Document has been removed from Knowledge Base.',
+          icon: 'success',
+          timer: 1500,
+          showConfirmButton: false,
+          background: '#ffffff',
+          color: '#1f2937',
+        });
+      }
+    } catch (error) {
+      console.error('Delete document error:', error);
+      onDeleteDocument(docId);
+    }
+  };
+
   return (
     <aside className="w-72 border-r border-border bg-sidebar flex flex-col h-full">
       {/* Header */}
@@ -242,10 +314,7 @@ export function ChatSidebar({
                         variant="ghost"
                         size="icon"
                         className="h-6 w-6 opacity-0 group-hover:opacity-100"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onDeleteDocument(doc.id);
-                        }}
+                        onClick={(e) => handleDeleteDocument(e, doc.id, doc.alias)}
                       >
                         <Trash2 className="w-3 h-3 text-muted-foreground hover:text-destructive" />
                       </Button>
@@ -322,10 +391,7 @@ export function ChatSidebar({
                         variant="ghost"
                         size="icon"
                         className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 h-6 w-6"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onDeleteSession(session.id);
-                        }}
+                        onClick={(e) => handleDeleteChat(e, session.id, session.title)}
                       >
                         <Trash2 className="w-3 h-3 text-muted-foreground hover:text-destructive" />
                       </Button>
