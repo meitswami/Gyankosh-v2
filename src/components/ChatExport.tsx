@@ -185,9 +185,7 @@ export function ChatExport({ messages, sessionId, sessionTitle }: ChatExportProp
         .from('shared_chats')
         .insert({
           session_id: sessionId,
-          messages_snapshot: messagesSnapshot,
-          title: sessionTitle || 'Shared Chat',
-          user_id: user.id,
+          share_token: crypto.randomUUID(),
           expires_at,
         })
         .select('share_token, expires_at')

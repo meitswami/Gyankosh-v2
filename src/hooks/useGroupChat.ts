@@ -1,14 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { 
-  generateGroupKey, 
-  encryptGroupKey, 
-  decryptGroupKey,
-  encryptWithGroupKey,
-  decryptWithGroupKey,
-  getPrivateKey 
-} from '@/lib/encryption';
 
 export interface ChatGroup {
   id: string;
@@ -16,6 +8,7 @@ export interface ChatGroup {
   description: string | null;
   avatar_url: string | null;
   created_by: string;
+  is_private: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -37,27 +30,14 @@ export interface GroupMessage {
   id: string;
   group_id: string;
   sender_id: string;
-  content: string; // Decrypted
-  content_type: string;
-  file_url: string | null;
-  file_name: string | null;
+  content: string;
+  message_type: string;
+  media_url: string | null;
   created_at: string;
   sender?: {
     display_name: string | null;
     avatar_url: string | null;
   };
-}
-
-interface RawGroupMessage {
-  id: string;
-  group_id: string;
-  sender_id: string;
-  encrypted_content: string;
-  iv: string;
-  content_type: string;
-  file_url: string | null;
-  file_name: string | null;
-  created_at: string;
 }
 
 export function useGroupChat(userId: string | null) {
@@ -66,7 +46,6 @@ export function useGroupChat(userId: string | null) {
   const [members, setMembers] = useState<GroupMember[]>([]);
   const [messages, setMessages] = useState<GroupMessage[]>([]);
   const [loading, setLoading] = useState(false);
-  const [groupKey, setGroupKey] = useState<string | null>(null);
   const { toast } = useToast();
 
   // Fetch all groups user is member of
@@ -75,7 +54,7 @@ export function useGroupChat(userId: string | null) {
 
     try {
       const { data: memberData } = await supabase
-        .from('group_members')
+        .from('group_chat_members')
         .select('group_id')
         .eq('user_id', userId);
 
@@ -84,9 +63,14 @@ export function useGroupChat(userId: string | null) {
         return;
       }
 
-      const groupIds = memberData.map(m => m.group_id);
+      const groupIds = memberData.map(m => m.group_id).filter(Boolean) as string[];
+      if (groupIds.length === 0) {
+        setGroups([]);
+        return;
+      }
+
       const { data: groupsData, error } = await supabase
-        .from('chat_groups')
+        .from('group_chats')
         .select('*')
         .in('id', groupIds)
         .order('updated_at', { ascending: false });
@@ -106,37 +90,17 @@ export function useGroupChat(userId: string | null) {
   const createGroup = useCallback(async (
     name: string,
     memberIds: string[],
-    memberPublicKeys: Record<string, string>
+    _memberPublicKeys?: Record<string, string>
   ) => {
     if (!userId) return null;
 
     try {
-      // Generate symmetric group key
-      const newGroupKey = await generateGroupKey();
-      
-      // Get creator's private key to encrypt group key for themselves
-      const privateKey = await getPrivateKey(userId);
-      if (!privateKey) throw new Error('No private key found');
-
-      // We need creator's public key too
-      const { data: creatorProfile } = await supabase
-        .from('profiles')
-        .select('public_key')
-        .eq('user_id', userId)
-        .single();
-
-      if (!creatorProfile?.public_key) throw new Error('No public key found');
-
-      // Encrypt group key for creator
-      const encryptedForCreator = await encryptGroupKey(newGroupKey, creatorProfile.public_key);
-
       // Create the group
       const { data: group, error: groupError } = await supabase
-        .from('chat_groups')
+        .from('group_chats')
         .insert({
           name,
           created_by: userId,
-          encrypted_group_key: encryptedForCreator,
         })
         .select()
         .single();
@@ -145,29 +109,22 @@ export function useGroupChat(userId: string | null) {
 
       // Add creator as admin
       await supabase
-        .from('group_members')
+        .from('group_chat_members')
         .insert({
           group_id: group.id,
           user_id: userId,
-          encrypted_group_key: encryptedForCreator,
           role: 'admin',
         });
 
-      // Add other members with their encrypted keys
+      // Add other members
       for (const memberId of memberIds) {
         if (memberId === userId) continue;
         
-        const publicKey = memberPublicKeys[memberId];
-        if (!publicKey) continue;
-
-        const encryptedForMember = await encryptGroupKey(newGroupKey, publicKey);
-        
         await supabase
-          .from('group_members')
+          .from('group_chat_members')
           .insert({
             group_id: group.id,
             user_id: memberId,
-            encrypted_group_key: encryptedForMember,
             role: 'member',
           });
       }
@@ -190,26 +147,9 @@ export function useGroupChat(userId: string | null) {
     setLoading(true);
 
     try {
-      // Get user's encrypted group key
-      const { data: membership } = await supabase
-        .from('group_members')
-        .select('encrypted_group_key')
-        .eq('group_id', group.id)
-        .eq('user_id', userId)
-        .single();
-
-      if (!membership) throw new Error('Not a member');
-
-      // Decrypt the group key
-      const privateKey = await getPrivateKey(userId);
-      if (!privateKey) throw new Error('No private key');
-
-      const decryptedKey = await decryptGroupKey(membership.encrypted_group_key, privateKey);
-      setGroupKey(decryptedKey);
-
       // Fetch members with profiles
       const { data: membersData } = await supabase
-        .from('group_members')
+        .from('group_chat_members')
         .select('*')
         .eq('group_id', group.id);
 
@@ -224,47 +164,32 @@ export function useGroupChat(userId: string | null) {
         const profileMap = new Map(profiles?.map(p => [p.user_id, p]));
         
         setMembers(membersData.map(m => ({
-          ...m,
-          role: m.role as 'admin' | 'member',
+          id: m.id,
+          group_id: m.group_id || '',
+          user_id: m.user_id,
+          role: (m.role || 'member') as 'admin' | 'member',
+          joined_at: m.joined_at,
           profile: profileMap.get(m.user_id) || undefined,
         })));
       }
 
-      // Fetch and decrypt messages
+      // Fetch messages
       const { data: messagesData } = await supabase
-        .from('group_messages')
+        .from('group_chat_messages')
         .select('*')
         .eq('group_id', group.id)
         .order('created_at', { ascending: true });
 
-      if (messagesData && decryptedKey) {
-        const decryptedMessages = await Promise.all(
-          messagesData.map(async (msg: RawGroupMessage) => {
-            try {
-              const content = await decryptWithGroupKey(
-                msg.encrypted_content,
-                msg.iv,
-                decryptedKey
-              );
-              return {
-                id: msg.id,
-                group_id: msg.group_id,
-                sender_id: msg.sender_id,
-                content,
-                content_type: msg.content_type,
-                file_url: msg.file_url,
-                file_name: msg.file_name,
-                created_at: msg.created_at,
-              };
-            } catch {
-              return {
-                ...msg,
-                content: '[Unable to decrypt]',
-              };
-            }
-          })
-        );
-        setMessages(decryptedMessages as GroupMessage[]);
+      if (messagesData) {
+        setMessages(messagesData.map(msg => ({
+          id: msg.id,
+          group_id: msg.group_id || '',
+          sender_id: msg.sender_id,
+          content: msg.content,
+          message_type: msg.message_type || 'text',
+          media_url: msg.media_url,
+          created_at: msg.created_at,
+        })));
       }
     } catch (error) {
       console.error('Error loading group:', error);
@@ -276,20 +201,17 @@ export function useGroupChat(userId: string | null) {
 
   // Send message to current group
   const sendMessage = useCallback(async (content: string, contentType = 'text', fileUrl?: string) => {
-    if (!userId || !currentGroup || !groupKey) return false;
+    if (!userId || !currentGroup) return false;
 
     try {
-      const { encryptedContent, iv } = await encryptWithGroupKey(content, groupKey);
-
       const { error } = await supabase
-        .from('group_messages')
+        .from('group_chat_messages')
         .insert({
           group_id: currentGroup.id,
           sender_id: userId,
-          encrypted_content: encryptedContent,
-          iv,
-          content_type: contentType,
-          file_url: fileUrl,
+          content,
+          message_type: contentType,
+          media_url: fileUrl,
         });
 
       if (error) throw error;
@@ -299,22 +221,18 @@ export function useGroupChat(userId: string | null) {
       toast({ title: 'Failed to send message', variant: 'destructive' });
       return false;
     }
-  }, [userId, currentGroup, groupKey, toast]);
+  }, [userId, currentGroup, toast]);
 
   // Add member to current group
-  const addMember = useCallback(async (memberId: string, publicKey: string) => {
-    if (!userId || !currentGroup || !groupKey) return false;
+  const addMember = useCallback(async (memberId: string, _publicKey?: string) => {
+    if (!userId || !currentGroup) return false;
 
     try {
-      // Encrypt group key for new member
-      const encryptedForMember = await encryptGroupKey(groupKey, publicKey);
-
       const { error } = await supabase
-        .from('group_members')
+        .from('group_chat_members')
         .insert({
           group_id: currentGroup.id,
           user_id: memberId,
-          encrypted_group_key: encryptedForMember,
           role: 'member',
         });
 
@@ -328,15 +246,16 @@ export function useGroupChat(userId: string | null) {
       toast({ title: 'Failed to add member', variant: 'destructive' });
       return false;
     }
-  }, [userId, currentGroup, groupKey, selectGroup, toast]);
+  }, [userId, currentGroup, selectGroup, toast]);
 
   // Remove member (admin only) or leave group
   const removeMember = useCallback(async (memberId: string) => {
     if (!currentGroup) return false;
 
     try {
+      // Note: RLS doesn't allow delete on group_chat_members, so this may fail
       const { error } = await supabase
-        .from('group_members')
+        .from('group_chat_members')
         .delete()
         .eq('group_id', currentGroup.id)
         .eq('user_id', memberId);
@@ -361,7 +280,7 @@ export function useGroupChat(userId: string | null) {
 
   // Subscribe to realtime messages
   useEffect(() => {
-    if (!currentGroup || !groupKey) return;
+    if (!currentGroup) return;
 
     const channel = supabase
       .channel(`group-${currentGroup.id}`)
@@ -370,29 +289,32 @@ export function useGroupChat(userId: string | null) {
         {
           event: 'INSERT',
           schema: 'public',
-          table: 'group_messages',
+          table: 'group_chat_messages',
           filter: `group_id=eq.${currentGroup.id}`,
         },
         async (payload) => {
-          const msg = payload.new as RawGroupMessage;
-          try {
-            const content = await decryptWithGroupKey(msg.encrypted_content, msg.iv, groupKey);
-            setMessages(prev => {
-              if (prev.some(m => m.id === msg.id)) return prev;
-              return [...prev, {
-                id: msg.id,
-                group_id: msg.group_id,
-                sender_id: msg.sender_id,
-                content,
-                content_type: msg.content_type,
-                file_url: msg.file_url,
-                file_name: msg.file_name,
-                created_at: msg.created_at,
-              }];
-            });
-          } catch (e) {
-            console.error('Failed to decrypt realtime message:', e);
-          }
+          const msg = payload.new as {
+            id: string;
+            group_id: string;
+            sender_id: string;
+            content: string;
+            message_type: string;
+            media_url: string | null;
+            created_at: string;
+          };
+          
+          setMessages(prev => {
+            if (prev.some(m => m.id === msg.id)) return prev;
+            return [...prev, {
+              id: msg.id,
+              group_id: msg.group_id || '',
+              sender_id: msg.sender_id,
+              content: msg.content,
+              message_type: msg.message_type || 'text',
+              media_url: msg.media_url,
+              created_at: msg.created_at,
+            }];
+          });
         }
       )
       .subscribe();
@@ -400,7 +322,7 @@ export function useGroupChat(userId: string | null) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [currentGroup, groupKey]);
+  }, [currentGroup]);
 
   return {
     groups,
@@ -414,7 +336,7 @@ export function useGroupChat(userId: string | null) {
     addMember,
     removeMember,
     leaveGroup: () => userId ? removeMember(userId) : Promise.resolve(false),
-    closeGroup: () => { setCurrentGroup(null); setMessages([]); setMembers([]); setGroupKey(null); },
+    closeGroup: () => { setCurrentGroup(null); setMessages([]); setMembers([]); },
     refetch: fetchGroups,
   };
 }

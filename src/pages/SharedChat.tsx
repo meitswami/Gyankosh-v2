@@ -17,7 +17,7 @@ interface SharedMessage {
 
 interface SharedChatData {
   title: string;
-  messages_snapshot: SharedMessage[];
+  messages: SharedMessage[];
   created_at: string;
 }
 
@@ -41,25 +41,59 @@ export default function SharedChat() {
       }
 
       try {
-        // Use secure RPC function instead of direct table access
-        const { data, error: fetchError } = await supabase
-          .rpc('get_shared_chat_by_token', { p_token: token });
+        // Get shared chat info
+        const { data: shareData, error: shareError } = await supabase
+          .from('shared_chats')
+          .select('session_id, expires_at')
+          .eq('share_token', token)
+          .single();
 
-        if (fetchError || !data || data.length === 0) {
+        if (shareError || !shareData) {
           setError('Chat not found or link has expired');
           return;
         }
 
-        const chatRecord = data[0];
+        // Check if link has expired
+        if (shareData.expires_at && new Date(shareData.expires_at) < new Date()) {
+          setError('This share link has expired');
+          return;
+        }
+
+        // Get the session info
+        const { data: sessionData, error: sessionError } = await supabase
+          .from('chat_sessions')
+          .select('title, created_at')
+          .eq('id', shareData.session_id)
+          .single();
+
+        if (sessionError || !sessionData) {
+          setError('Chat session not found');
+          return;
+        }
+
+        // Get messages for this session
+        const { data: messagesData, error: messagesError } = await supabase
+          .from('chat_messages')
+          .select('role, content, created_at')
+          .eq('session_id', shareData.session_id)
+          .order('created_at', { ascending: true });
+
+        if (messagesError) {
+          setError('Failed to load messages');
+          return;
+        }
+
+        const messages: SharedMessage[] = (messagesData || []).map(m => ({
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+          createdAt: m.created_at,
+        }));
 
         setChatData({
-          title: chatRecord.title,
-          messages_snapshot: chatRecord.messages_snapshot as unknown as SharedMessage[],
-          created_at: chatRecord.created_at,
+          title: sessionData.title,
+          messages,
+          created_at: sessionData.created_at,
         });
-
-        // Increment view count using secure RPC function
-        await supabase.rpc('increment_chat_view_count', { p_token: token });
       } catch (err) {
         console.error('Error fetching shared chat:', err);
         setError('Failed to load shared chat');
@@ -128,7 +162,7 @@ export default function SharedChat() {
       <main className="max-w-4xl mx-auto p-6">
         <ScrollArea className="h-[calc(100vh-180px)]">
           <div className="space-y-6">
-            {chatData.messages_snapshot.map((msg, index) => (
+            {chatData.messages.map((msg, index) => (
               <div
                 key={index}
                 className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}

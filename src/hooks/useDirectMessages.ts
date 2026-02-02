@@ -11,14 +11,9 @@ export interface DirectMessage {
   content: string; // Decrypted content
   encrypted_content: string;
   iv: string;
-  content_type: 'text' | 'file' | 'document' | 'audio' | 'video';
-  file_url: string | null;
-  file_name?: string | null;
-  file_size?: number | null;
-  file_type?: string | null;
-  read_at: string | null;
-  delivered_at: string | null;
-  status: 'sent' | 'delivered' | 'read';
+  message_type: 'text' | 'file' | 'document' | 'audio' | 'video';
+  media_url: string | null;
+  is_read: boolean;
   created_at: string;
 }
 
@@ -28,14 +23,9 @@ interface RawMessage {
   recipient_id: string;
   encrypted_content: string;
   iv: string;
-  content_type: string;
-  file_url: string | null;
-  file_name?: string | null;
-  file_size?: number | null;
-  file_type?: string | null;
-  read_at: string | null;
-  delivered_at: string | null;
-  status: string;
+  message_type: string;
+  media_url: string | null;
+  is_read: boolean;
   created_at: string;
 }
 
@@ -65,16 +55,14 @@ export function useDirectMessages(currentUserId: string | null, friendProfile: U
       return {
         ...msg,
         content: decrypted,
-        content_type: msg.content_type as DirectMessage['content_type'],
-        status: (msg.status || 'sent') as DirectMessage['status'],
+        message_type: msg.message_type as DirectMessage['message_type'],
       };
     } catch (error) {
       console.error('Decryption error:', error);
       return {
         ...msg,
         content: '[Unable to decrypt message]',
-        content_type: msg.content_type as DirectMessage['content_type'],
-        status: (msg.status || 'sent') as DirectMessage['status'],
+        message_type: msg.message_type as DirectMessage['message_type'],
       };
     }
   }, []);
@@ -136,8 +124,8 @@ export function useDirectMessages(currentUserId: string | null, friendProfile: U
           recipient_id: friendProfile.user_id,
           encrypted_content: combinedEncrypted,
           iv,
-          content_type: contentType,
-          file_url: fileUrl,
+          message_type: contentType,
+          media_url: fileUrl,
         });
 
       if (error) throw error;
@@ -150,25 +138,22 @@ export function useDirectMessages(currentUserId: string | null, friendProfile: U
     }
   }, [currentUserId, friendProfile, toast]);
 
-  // Mark messages as read (updates both read_at and status)
+  // Mark messages as read
   const markAsRead = useCallback(async () => {
     if (!currentUserId || !friendProfile) return;
 
     try {
       await supabase
         .from('direct_messages')
-        .update({ 
-          read_at: new Date().toISOString(),
-          status: 'read'
-        })
+        .update({ is_read: true })
         .eq('recipient_id', currentUserId)
         .eq('sender_id', friendProfile.user_id)
-        .is('read_at', null);
+        .eq('is_read', false);
         
       // Update local messages state to reflect read status
       setMessages(prev => prev.map(msg => 
-        msg.sender_id === friendProfile.user_id && !msg.read_at
-          ? { ...msg, read_at: new Date().toISOString(), status: 'read' as const }
+        msg.sender_id === friendProfile.user_id && !msg.is_read
+          ? { ...msg, is_read: true }
           : msg
       ));
     } catch (error) {
@@ -185,7 +170,7 @@ export function useDirectMessages(currentUserId: string | null, friendProfile: U
         .from('direct_messages')
         .select('*', { count: 'exact', head: true })
         .eq('recipient_id', currentUserId)
-        .is('read_at', null);
+        .eq('is_read', false);
 
       setUnreadCount(count || 0);
     } catch (error) {
@@ -215,25 +200,11 @@ export function useDirectMessages(currentUserId: string | null, friendProfile: U
         async (payload) => {
           const newMsg = payload.new as RawMessage;
           
-          // Mark message as delivered when recipient's app receives it
-          await supabase
-            .from('direct_messages')
-            .update({ 
-              delivered_at: new Date().toISOString(),
-              status: 'delivered'
-            })
-            .eq('id', newMsg.id)
-            .is('delivered_at', null);
-          
           // Get private key and decrypt
           const privateKey = await getPrivateKey(currentUserId);
           if (privateKey) {
             const decrypted = await decryptSingleMessage(newMsg, privateKey);
             if (decrypted) {
-              // Update decrypted message with delivered status
-              decrypted.status = 'delivered';
-              decrypted.delivered_at = new Date().toISOString();
-              
               // If chat is open with this friend, add to messages
               if (friendProfile && newMsg.sender_id === friendProfile.user_id) {
                 setMessages(prev => [...prev, decrypted]);

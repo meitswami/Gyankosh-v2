@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { BookOpen, FileText, ArrowLeft, Calendar, Eye, Tag } from 'lucide-react';
+import { BookOpen, FileText, ArrowLeft, Calendar, Tag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
@@ -17,7 +17,6 @@ interface SharedDocumentData {
   created_at: string;
   tags: string[] | null;
   category: string | null;
-  view_count: number;
 }
 
 export default function SharedDocument() {
@@ -38,7 +37,7 @@ export default function SharedDocument() {
         // Get shared document info
         const { data: shareData, error: shareError } = await supabase
           .from('shared_documents')
-          .select('document_id, view_count, expires_at')
+          .select('document_id, expires_at')
           .eq('share_token', token)
           .single();
 
@@ -65,16 +64,7 @@ export default function SharedDocument() {
           return;
         }
 
-        setDocData({
-          ...docResult,
-          view_count: shareData.view_count,
-        });
-
-        // Increment view count
-        await supabase
-          .from('shared_documents')
-          .update({ view_count: shareData.view_count + 1 })
-          .eq('share_token', token);
+        setDocData(docResult);
       } catch (err) {
         console.error('Error fetching shared document:', err);
         setError('Failed to load shared document');
@@ -147,10 +137,6 @@ export default function SharedDocument() {
             <span className="flex items-center gap-1">
               <Calendar className="w-4 h-4" />
               {format(new Date(docData.created_at), 'MMM d, yyyy')}
-            </span>
-            <span className="flex items-center gap-1">
-              <Eye className="w-4 h-4" />
-              {docData.view_count + 1} views
             </span>
             {docData.category && (
               <Badge variant="outline">{docData.category}</Badge>

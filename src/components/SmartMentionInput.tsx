@@ -137,7 +137,7 @@ export function SmartMentionInput({
           id: i.id,
           label: i.name,
           sublabel: i.description || i.base_url,
-          icon: i.icon,
+          icon: '🔌',
         }));
 
       // Add search engine options

@@ -215,8 +215,8 @@ export function ChatWidget({ documents, onShareDocument }: ChatWidgetProps) {
   };
 
   const handleDownloadFile = async (msg: typeof messages[0]) => {
-    if (!currentUser || !msg.file_url) return;
-    window.open(msg.file_url, '_blank');
+    if (!currentUser || !msg.media_url) return;
+    window.open(msg.media_url, '_blank');
   };
 
   const handleSelectFromSearch = (friendId: string) => {
@@ -323,8 +323,8 @@ export function ChatWidget({ documents, onShareDocument }: ChatWidgetProps) {
                   <div className="space-y-3">
                     {filteredMessages.map((msg) => {
                       const isOwn = msg.sender_id === currentUser.user_id;
-                      const isFile = msg.content_type === 'file';
-                      const isMedia = msg.content_type === 'audio' || msg.content_type === 'video';
+                      const isFile = msg.message_type === 'file';
+                      const isMedia = msg.message_type === 'audio' || msg.message_type === 'video';
                       const reactions = getReactions(msg.id);
                       
                       return (
@@ -345,13 +345,13 @@ export function ChatWidget({ documents, onShareDocument }: ChatWidgetProps) {
                                   onClick={() => handleDownloadFile(msg)}
                                   className="flex items-center gap-2 hover:opacity-80 transition-opacity"
                                 >
-                                  {msg.content_type === 'audio' ? <Mic className="w-4 h-4" /> : 
-                                   msg.content_type === 'video' ? <Video className="w-4 h-4" /> :
+                                  {msg.message_type === 'audio' ? <Mic className="w-4 h-4" /> : 
+                                   msg.message_type === 'video' ? <Video className="w-4 h-4" /> :
                                    <File className="w-4 h-4" />}
                                   <span className="text-sm underline">{msg.content}</span>
                                   <Download className="w-3 h-3" />
                                 </button>
-                              ) : msg.content_type === 'document' ? (
+                              ) : msg.message_type === 'document' ? (
                                 <div className="flex items-center gap-2">
                                   <FileText className="w-4 h-4" />
                                   <span className="text-sm">{msg.content}</span>
@@ -369,9 +369,9 @@ export function ChatWidget({ documents, onShareDocument }: ChatWidgetProps) {
                                 {formatMessageTime(msg.created_at)}
                               </span>
                               <MessageStatusIndicator
-                                status={msg.status}
-                                deliveredAt={msg.delivered_at}
-                                readAt={msg.read_at}
+                                status={msg.is_read ? 'read' : 'sent'}
+                                deliveredAt={null}
+                                readAt={msg.is_read ? msg.created_at : null}
                                 createdAt={msg.created_at}
                                 isOwn={isOwn}
                               />

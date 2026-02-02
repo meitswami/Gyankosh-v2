@@ -24,7 +24,7 @@ export function useMessageNotifications(currentUserId: string | null) {
         .from('direct_messages')
         .select('id, sender_id, created_at')
         .eq('recipient_id', currentUserId)
-        .is('read_at', null)
+        .eq('is_read', false)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -60,10 +60,10 @@ export function useMessageNotifications(currentUserId: string | null) {
     try {
       await supabase
         .from('direct_messages')
-        .update({ read_at: new Date().toISOString() })
+        .update({ is_read: true })
         .eq('recipient_id', currentUserId)
         .eq('sender_id', friendId)
-        .is('read_at', null);
+        .eq('is_read', false);
 
       // Update local state
       setUnreadByFriend(prev => {
