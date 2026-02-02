@@ -8,7 +8,8 @@ export interface ActivityLog {
   action: string;
   resource_type: string;
   resource_id: string | null;
-  details: Json;
+  resource_name: string | null;
+  metadata: Json | null;
   ip_address: string | null;
   user_agent: string | null;
   created_at: string;
@@ -53,7 +54,7 @@ export function useActivityLogs(userId: string | null) {
         action,
         resource_type: resourceType,
         resource_id: resourceId || null,
-        details: details || {},
+        metadata: details || {},
         user_agent: navigator.userAgent,
       });
     } catch (error) {
