@@ -291,14 +291,19 @@ export function ExcelSearchPanel({ onClose }: ExcelSearchPanelProps) {
                       Upload any Excel file (.xlsx, .xls) and ask questions about the data.
                       I'll search across all sheets and provide answers with cell references.
                     </p>
-                    <label className="cursor-pointer">
+                    <>
                       <input
+                        id="excel-file-input"
                         type="file"
                         accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
                         onChange={handleFileUpload}
                         className="hidden"
                       />
-                      <Button disabled={isParsing} className="gap-2">
+                      <Button 
+                        disabled={isParsing} 
+                        className="gap-2"
+                        onClick={() => window.document.getElementById('excel-file-input')?.click()}
+                      >
                         {isParsing ? (
                           <Loader2 className="w-4 h-4 animate-spin" />
                         ) : (
@@ -306,7 +311,7 @@ export function ExcelSearchPanel({ onClose }: ExcelSearchPanelProps) {
                         )}
                         {isParsing ? 'Parsing...' : 'Choose Excel File'}
                       </Button>
-                    </label>
+                    </>
                   </CardContent>
                 </Card>
               ) : (
