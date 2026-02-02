@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { FileSpreadsheet, Send, Download, BarChart2, X, Loader2, FileText, Sparkles, Square, Bell } from 'lucide-react';
+import { FileSpreadsheet, Send, Download, BarChart2, X, Loader2, FileText, Sparkles, Square, Bell, FolderOpen, Clock, Database } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -13,6 +13,7 @@ import { ExcelCharts } from './ExcelCharts';
 import { exportExcelChatToDocx } from '@/lib/docxExport';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { Progress } from '@/components/ui/progress';
+import { useDocuments, type Document } from '@/hooks/useDocuments';
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/excel-search`;
 
@@ -49,21 +50,51 @@ const sendNotification = (title: string, body: string) => {
   }
 };
 
+// Parse stored Excel JSON back to ParsedExcel format
+const parseStoredExcel = (doc: Document): ParsedExcel | null => {
+  try {
+    if (!doc.content_text) return null;
+    const parsed = JSON.parse(doc.content_text);
+    if (parsed.sheets && parsed.searchableContent) {
+      return {
+        fileName: doc.name,
+        sheets: parsed.sheets,
+        totalCells: parsed.totalCells || 0,
+        searchableContent: parsed.searchableContent,
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
 export function ExcelSearchPanel({ onClose }: ExcelSearchPanelProps) {
   const [excel, setExcel] = useState<ParsedExcel | null>(null);
   const [messages, setMessages] = useState<ExcelMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [activeVisualization, setActiveVisualization] = useState<{
     sheetName: string;
     columns: number[];
   } | null>(null);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [showKnowledgeBase, setShowKnowledgeBase] = useState(true);
   const abortControllerRef = useRef<AbortController | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
+  const { documents, uploadDocument, loading: docsLoading } = useDocuments();
+
+  // Filter only Excel documents from knowledge base
+  const excelDocuments = documents.filter(doc => 
+    doc.file_type?.includes('spreadsheet') || 
+    doc.file_type?.includes('excel') ||
+    doc.name?.endsWith('.xlsx') ||
+    doc.name?.endsWith('.xls')
+  );
 
   // Check notification permission on mount
   useEffect(() => {
@@ -115,6 +146,30 @@ export function ExcelSearchPanel({ onClose }: ExcelSearchPanelProps) {
     }
   }, [toast]);
 
+  // Load Excel from knowledge base
+  const handleLoadFromKnowledgeBase = useCallback((doc: Document) => {
+    const parsed = parseStoredExcel(doc);
+    if (parsed) {
+      setExcel(parsed);
+      setShowKnowledgeBase(false);
+      setMessages([{
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: `📊 **Loaded from Knowledge Base: ${parsed.fileName}**\n\nI found **${parsed.sheets.length} sheet(s)** with **${parsed.totalCells.toLocaleString()} cells** total.\n\n**Sheets:**\n${parsed.sheets.map(s => `- ${s.name} (${s.rowCount} rows × ${s.colCount} cols)`).join('\n')}\n\nAsk me anything about this data! I can:\n- Find specific values across all sheets\n- Calculate formulas (SUM, AVG, COUNT, etc.)\n- Create visualizations\n- Export answers to DOCX`,
+      }]);
+      toast({
+        title: 'Excel loaded from Knowledge Base',
+        description: `${parsed.sheets.length} sheets ready to analyze`,
+      });
+    } else {
+      toast({
+        title: 'Cannot load Excel',
+        description: 'This file may need to be re-uploaded',
+        variant: 'destructive',
+      });
+    }
+  }, [toast]);
+
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -140,15 +195,34 @@ export function ExcelSearchPanel({ onClose }: ExcelSearchPanelProps) {
     try {
       const parsed = await parseExcelFile(file);
       setExcel(parsed);
+      setShowKnowledgeBase(false);
+      
+      // Save to knowledge base
+      setIsSaving(true);
+      const contentForStorage = JSON.stringify({
+        sheets: parsed.sheets,
+        totalCells: parsed.totalCells,
+        searchableContent: parsed.searchableContent,
+      });
+      
+      // Generate summary
+      const sheetSummary = parsed.sheets.map(s => `${s.name} (${s.rowCount}×${s.colCount})`).join(', ');
+      
+      await uploadDocument(file, contentForStorage, {
+        documentType: 'Excel Spreadsheet',
+        summary: `${parsed.sheets.length} sheets, ${parsed.totalCells.toLocaleString()} cells. Sheets: ${sheetSummary}`,
+        alias: file.name.replace(/\.[^/.]+$/, ''),
+      });
+      
       setMessages([{
         id: crypto.randomUUID(),
         role: 'assistant',
-        content: `📊 **Excel loaded: ${parsed.fileName}**\n\nI found **${parsed.sheets.length} sheet(s)** with **${parsed.totalCells.toLocaleString()} cells** total.\n\n**Sheets:**\n${parsed.sheets.map(s => `- ${s.name} (${s.rowCount} rows × ${s.colCount} cols)`).join('\n')}\n\nAsk me anything about this data! I can:\n- Find specific values across all sheets\n- Calculate formulas (SUM, AVG, COUNT, etc.)\n- Create visualizations\n- Export answers to DOCX`,
+        content: `📊 **Excel loaded & saved: ${parsed.fileName}**\n\n✅ **Saved to Knowledge Base** - You can access this file anytime!\n\nI found **${parsed.sheets.length} sheet(s)** with **${parsed.totalCells.toLocaleString()} cells** total.\n\n**Sheets:**\n${parsed.sheets.map(s => `- ${s.name} (${s.rowCount} rows × ${s.colCount} cols)`).join('\n')}\n\nAsk me anything about this data! I can:\n- Find specific values across all sheets\n- Calculate formulas (SUM, AVG, COUNT, etc.)\n- Create visualizations\n- Export answers to DOCX`,
       }]);
       
       toast({
-        title: 'Excel loaded!',
-        description: `${parsed.sheets.length} sheets, ${parsed.totalCells.toLocaleString()} cells ready to search`,
+        title: 'Excel loaded & saved!',
+        description: `${parsed.sheets.length} sheets saved to Knowledge Base`,
       });
     } catch (error) {
       console.error('Excel parse error:', error);
@@ -159,8 +233,9 @@ export function ExcelSearchPanel({ onClose }: ExcelSearchPanelProps) {
       });
     } finally {
       setIsParsing(false);
+      setIsSaving(false);
     }
-  }, [toast]);
+  }, [toast, uploadDocument]);
 
   const handleSend = useCallback(async () => {
     if (!input.trim() || !excel || isLoading) return;
@@ -335,6 +410,13 @@ export function ExcelSearchPanel({ onClose }: ExcelSearchPanelProps) {
     setActiveVisualization({ sheetName, columns });
   }, []);
 
+  const handleBackToKnowledgeBase = useCallback(() => {
+    setExcel(null);
+    setMessages([]);
+    setShowKnowledgeBase(true);
+    setActiveVisualization(null);
+  }, []);
+
   return (
     <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex flex-col">
       {/* Header */}
@@ -346,11 +428,22 @@ export function ExcelSearchPanel({ onClose }: ExcelSearchPanelProps) {
           <div>
             <h1 className="font-semibold text-lg">Excel Search</h1>
             <p className="text-xs text-muted-foreground">
-              {excel ? `${excel.fileName} • ${excel.sheets.length} sheets` : 'Upload an Excel file to start'}
+              {excel ? `${excel.fileName} • ${excel.sheets.length} sheets` : 'Upload or select from Knowledge Base'}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {excel && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleBackToKnowledgeBase}
+              className="gap-1.5"
+            >
+              <Database className="w-4 h-4" />
+              Knowledge Base
+            </Button>
+          )}
           {excel && (
             <Button 
               variant={notificationsEnabled ? "secondary" : "outline"} 
@@ -380,39 +473,95 @@ export function ExcelSearchPanel({ onClose }: ExcelSearchPanelProps) {
         <div className="flex-1 flex flex-col">
           <ScrollArea className="flex-1 p-6">
             <div className="max-w-3xl mx-auto space-y-6">
-              {!excel ? (
-                <Card className="border-dashed">
-                  <CardContent className="flex flex-col items-center justify-center py-12">
-                    <FileSpreadsheet className="w-16 h-16 text-muted-foreground/50 mb-4" />
-                    <h3 className="text-lg font-medium mb-2">Upload Excel File</h3>
-                    <p className="text-sm text-muted-foreground mb-4 text-center max-w-md">
-                      Upload any Excel file (.xlsx, .xls) and ask questions about the data.
-                      I'll search across all sheets and provide answers with cell references.
-                    </p>
-                    <>
-                      <input
-                        id="excel-file-input"
-                        type="file"
-                        accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
-                        onChange={handleFileUpload}
-                        className="hidden"
-                      />
-                      <Button 
-                        disabled={isParsing} 
-                        className="gap-2"
-                        onClick={() => window.document.getElementById('excel-file-input')?.click()}
-                      >
-                        {isParsing ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
+              {!excel && showKnowledgeBase ? (
+                <div className="space-y-6">
+                  {/* Upload new file card */}
+                  <Card className="border-dashed">
+                    <CardContent className="flex flex-col items-center justify-center py-8">
+                      <FileSpreadsheet className="w-12 h-12 text-muted-foreground/50 mb-3" />
+                      <h3 className="text-lg font-medium mb-2">Upload New Excel File</h3>
+                      <p className="text-sm text-muted-foreground mb-4 text-center max-w-md">
+                        Upload a new Excel file to analyze. It will be saved to your Knowledge Base for future access.
+                      </p>
+                      <>
+                        <input
+                          id="excel-file-input"
+                          type="file"
+                          accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                          onChange={handleFileUpload}
+                          className="hidden"
+                        />
+                        <Button 
+                          disabled={isParsing || isSaving} 
+                          className="gap-2"
+                          onClick={() => window.document.getElementById('excel-file-input')?.click()}
+                        >
+                          {isParsing || isSaving ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <FileSpreadsheet className="w-4 h-4" />
+                          )}
+                          {isParsing ? 'Parsing...' : isSaving ? 'Saving...' : 'Choose Excel File'}
+                        </Button>
+                      </>
+                    </CardContent>
+                  </Card>
+
+                  {/* Previously uploaded Excel files */}
+                  {excelDocuments.length > 0 && (
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <Database className="w-4 h-4" />
+                          Your Excel Files in Knowledge Base
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2">
+                        {docsLoading ? (
+                          <div className="flex items-center justify-center py-4">
+                            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                          </div>
                         ) : (
-                          <FileSpreadsheet className="w-4 h-4" />
+                          excelDocuments.map((doc) => (
+                            <button
+                              key={doc.id}
+                              onClick={() => handleLoadFromKnowledgeBase(doc)}
+                              className="w-full flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors text-left"
+                            >
+                              <div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center flex-shrink-0">
+                                <FileSpreadsheet className="w-5 h-5 text-green-600" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-sm truncate">{doc.alias || doc.name}</p>
+                                <p className="text-xs text-muted-foreground truncate">
+                                  {doc.summary || doc.name}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                <Clock className="w-3 h-3" />
+                                {new Date(doc.created_at).toLocaleDateString()}
+                              </div>
+                            </button>
+                          ))
                         )}
-                        {isParsing ? 'Parsing...' : 'Choose Excel File'}
-                      </Button>
-                    </>
-                  </CardContent>
-                </Card>
-              ) : (
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Empty state if no Excel files */}
+                  {!docsLoading && excelDocuments.length === 0 && (
+                    <Card className="bg-muted/30">
+                      <CardContent className="flex flex-col items-center justify-center py-8">
+                        <FolderOpen className="w-10 h-10 text-muted-foreground/50 mb-3" />
+                        <p className="text-sm text-muted-foreground text-center">
+                          No Excel files in your Knowledge Base yet.<br />
+                          Upload one above to get started!
+                        </p>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              ) : excel ? (
                 <>
                   {/* Excel Viewer */}
                   <ExcelViewer 
@@ -486,7 +635,7 @@ export function ExcelSearchPanel({ onClose }: ExcelSearchPanelProps) {
                     </div>
                   )}
                 </>
-              )}
+              ) : null}
             </div>
           </ScrollArea>
 
