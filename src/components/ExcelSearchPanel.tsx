@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react';
-import { FileSpreadsheet, Send, Download, BarChart2, X, Loader2, FileText, Sparkles } from 'lucide-react';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { FileSpreadsheet, Send, Download, BarChart2, X, Loader2, FileText, Sparkles, Square, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -12,6 +12,7 @@ import { ExcelViewer } from './ExcelViewer';
 import { ExcelCharts } from './ExcelCharts';
 import { exportExcelChatToDocx } from '@/lib/docxExport';
 import { MarkdownRenderer } from './MarkdownRenderer';
+import { Progress } from '@/components/ui/progress';
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/excel-search`;
 
@@ -30,6 +31,24 @@ interface ExcelSearchPanelProps {
   onClose: () => void;
 }
 
+// Request notification permission
+const requestNotificationPermission = async () => {
+  if ('Notification' in window && Notification.permission === 'default') {
+    await Notification.requestPermission();
+  }
+};
+
+// Send browser notification
+const sendNotification = (title: string, body: string) => {
+  if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
+    new Notification(title, {
+      body,
+      icon: '/favicon.png',
+      tag: 'excel-analysis',
+    });
+  }
+};
+
 export function ExcelSearchPanel({ onClose }: ExcelSearchPanelProps) {
   const [excel, setExcel] = useState<ParsedExcel | null>(null);
   const [messages, setMessages] = useState<ExcelMessage[]>([]);
@@ -40,7 +59,61 @@ export function ExcelSearchPanel({ onClose }: ExcelSearchPanelProps) {
     sheetName: string;
     columns: number[];
   } | null>(null);
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
+
+  // Check notification permission on mount
+  useEffect(() => {
+    if ('Notification' in window) {
+      setNotificationsEnabled(Notification.permission === 'granted');
+    }
+  }, []);
+
+  // Timer for elapsed time
+  useEffect(() => {
+    if (isLoading) {
+      setElapsedTime(0);
+      timerRef.current = setInterval(() => {
+        setElapsedTime(prev => prev + 1);
+      }, 1000);
+    } else {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    }
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
+  }, [isLoading]);
+
+  const handleEnableNotifications = async () => {
+    await requestNotificationPermission();
+    setNotificationsEnabled(Notification.permission === 'granted');
+    if (Notification.permission === 'granted') {
+      toast({
+        title: 'Notifications enabled',
+        description: "You'll be notified when analysis completes",
+      });
+    }
+  };
+
+  const handleStopAnalysis = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+      setIsLoading(false);
+      toast({
+        title: 'Analysis stopped',
+        description: 'The analysis was cancelled',
+      });
+    }
+  }, [toast]);
 
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -92,6 +165,9 @@ export function ExcelSearchPanel({ onClose }: ExcelSearchPanelProps) {
   const handleSend = useCallback(async () => {
     if (!input.trim() || !excel || isLoading) return;
 
+    // Create abort controller for this request
+    abortControllerRef.current = new AbortController();
+
     const userMessage: ExcelMessage = {
       id: crypto.randomUUID(),
       role: 'user',
@@ -141,6 +217,7 @@ export function ExcelSearchPanel({ onClose }: ExcelSearchPanelProps) {
           searchResults: searchResults.slice(0, 20),
           wantsVisualization: wantsViz,
         }),
+        signal: abortControllerRef.current.signal,
       });
 
       if (!response.ok) {
@@ -209,15 +286,24 @@ export function ExcelSearchPanel({ onClose }: ExcelSearchPanelProps) {
         }
       }
 
+      // Send notification when complete
+      sendNotification('Analysis Complete', 'Your Excel analysis is ready!');
+
     } catch (error) {
+      // Don't show error for aborted requests
+      if (error instanceof Error && error.name === 'AbortError') {
+        return;
+      }
       console.error('Excel search error:', error);
       setMessages(prev => [...prev, {
         id: crypto.randomUUID(),
         role: 'assistant',
         content: `❌ Error: ${error instanceof Error ? error.message : 'Failed to process your question'}`,
       }]);
+      sendNotification('Analysis Error', 'There was an error processing your Excel query');
     } finally {
       setIsLoading(false);
+      abortControllerRef.current = null;
     }
   }, [input, excel, isLoading]);
 
@@ -265,6 +351,18 @@ export function ExcelSearchPanel({ onClose }: ExcelSearchPanelProps) {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {excel && (
+            <Button 
+              variant={notificationsEnabled ? "secondary" : "outline"} 
+              size="sm" 
+              onClick={handleEnableNotifications}
+              className="gap-1.5"
+              title={notificationsEnabled ? "Notifications enabled" : "Enable notifications"}
+            >
+              <Bell className={`w-4 h-4 ${notificationsEnabled ? 'text-green-600' : ''}`} />
+              {notificationsEnabled ? 'Notifying' : 'Notify me'}
+            </Button>
+          )}
           {excel && messages.length > 1 && (
             <Button variant="outline" size="sm" onClick={handleExportDocx} className="gap-1.5">
               <FileText className="w-4 h-4" />
@@ -362,11 +460,28 @@ export function ExcelSearchPanel({ onClose }: ExcelSearchPanelProps) {
 
                   {isLoading && (
                     <div className="flex justify-start">
-                      <div className="bg-muted rounded-2xl rounded-bl-md px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          <span className="text-sm">Analyzing...</span>
+                      <div className="bg-muted rounded-2xl rounded-bl-md px-4 py-3 min-w-[280px]">
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-2">
+                            <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                            <div>
+                              <span className="text-sm font-medium">Analyzing...</span>
+                              <p className="text-xs text-muted-foreground">
+                                {elapsedTime}s elapsed • Est. 10-30s for complex queries
+                              </p>
+                            </div>
+                          </div>
+                          <Button 
+                            variant="destructive" 
+                            size="sm" 
+                            onClick={handleStopAnalysis}
+                            className="gap-1 h-7 px-2"
+                          >
+                            <Square className="w-3 h-3 fill-current" />
+                            Stop
+                          </Button>
                         </div>
+                        <Progress value={Math.min(elapsedTime * 3.3, 95)} className="mt-2 h-1" />
                       </div>
                     </div>
                   )}
@@ -387,14 +502,17 @@ export function ExcelSearchPanel({ onClose }: ExcelSearchPanelProps) {
                   disabled={isLoading}
                   className="flex-1"
                 />
-                <Button onClick={handleSend} disabled={isLoading || !input.trim()} className="gap-1.5">
-                  {isLoading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
+                {isLoading ? (
+                  <Button onClick={handleStopAnalysis} variant="destructive" className="gap-1.5">
+                    <Square className="w-4 h-4 fill-current" />
+                    Stop
+                  </Button>
+                ) : (
+                  <Button onClick={handleSend} disabled={!input.trim()} className="gap-1.5">
                     <Send className="w-4 h-4" />
-                  )}
-                  Ask
-                </Button>
+                    Ask
+                  </Button>
+                )}
               </div>
               <div className="max-w-3xl mx-auto mt-2 flex flex-wrap gap-2">
                 <Badge variant="outline" className="text-xs cursor-pointer hover:bg-muted" onClick={() => setInput('What is the total of column B?')}>
