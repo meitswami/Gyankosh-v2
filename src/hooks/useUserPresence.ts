@@ -192,38 +192,25 @@ export function useUserPresence() {
   useEffect(() => {
     let mounted = true;
 
-    const init = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (session?.user && mounted) {
-        await initializeProfile(session.user.id, session.user.email || '');
-        await Promise.all([
-          fetchFriends(session.user.id),
-          fetchAllUsers(session.user.id),
-        ]);
-      }
-      
-      if (mounted) setLoading(false);
-    };
-
-    init();
-
-    // Listen for auth changes
+    // Listen for auth changes - INITIAL_SESSION fires on page load with existing session
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session?.user && mounted) {
+      if (!mounted) return;
+      
+      // Initialize on initial load, sign in, or token refresh
+      if ((event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.user) {
         await initializeProfile(session.user.id, session.user.email || '');
         await Promise.all([
           fetchFriends(session.user.id),
           fetchAllUsers(session.user.id),
         ]);
+        setLoading(false);
       } else if (event === 'SIGNED_OUT') {
         if (currentUser) {
           await updateStatus('offline');
         }
-        if (mounted) {
-          setCurrentUser(null);
-          setFriends([]);
-        }
+        setCurrentUser(null);
+        setFriends([]);
+        setLoading(false);
       }
     });
 

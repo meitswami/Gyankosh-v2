@@ -40,37 +40,21 @@ export function useChatSessions() {
   }, []);
 
   useEffect(() => {
-    // Wait for auth state to be ready before fetching
     let mounted = true;
-    
-    const init = async () => {
-      // Wait for auth to initialize
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (mounted) {
-        if (session) {
-          await fetchSessions();
-        } else {
-          setLoading(false);
-          setSessions([]);
-        }
-      }
-    };
 
-    // Listen for auth changes and fetch when signed in
+    // Listen for auth changes - INITIAL_SESSION fires on page load with existing session
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (mounted) {
-        if (event === 'SIGNED_IN' && session) {
-          await fetchSessions();
-        } else if (event === 'SIGNED_OUT') {
-          setSessions([]);
-          setCurrentSessionId(null);
-          setLoading(false);
-        }
+      if (!mounted) return;
+      
+      // Fetch on initial load, sign in, or token refresh
+      if ((event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session) {
+        await fetchSessions();
+      } else if (event === 'SIGNED_OUT') {
+        setSessions([]);
+        setCurrentSessionId(null);
+        setLoading(false);
       }
     });
-
-    init();
 
     return () => {
       mounted = false;
