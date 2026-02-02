@@ -353,6 +353,131 @@ const Index = () => {
   }, [toast, uploadDocument]);
 
   const handleSendMessage = useCallback(async (message: string, mentions?: { type: string; id: string; label: string }[]) => {
+    // Detect YouTube URLs in the message
+    const youtubePattern = /(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]+)/;
+    const youtubeMatch = message.match(youtubePattern);
+    
+    if (youtubeMatch) {
+      // Handle YouTube video analysis
+      const videoUrl = message.match(/(https?:\/\/[^\s]+youtube[^\s]+|https?:\/\/youtu\.be\/[^\s]+)/)?.[0] || message;
+      
+      let sessionId = currentSessionId;
+      if (!sessionId) {
+        const newSession = await createSession(`🎥 Video: ${generateTitle(message)}`);
+        if (!newSession) return;
+        sessionId = newSession.id;
+      }
+
+      // Add user message to UI
+      setMessages(prev => [...prev, {
+        id: crypto.randomUUID(),
+        role: 'user' as const,
+        content: message,
+        createdAt: new Date(),
+      }]);
+
+      // Save user message
+      await supabase.from('chat_messages').insert({
+        session_id: sessionId,
+        role: 'user',
+        content: message,
+        document_id: null,
+      });
+
+      // Show processing message
+      setMessages(prev => [...prev, {
+        id: crypto.randomUUID(),
+        role: 'assistant' as const,
+        content: '🎥 Analyzing YouTube video... This may take a moment as I watch and transcribe the content.',
+        createdAt: new Date(),
+      }]);
+
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) throw new Error('Not authenticated');
+
+        // Call YouTube transcription edge function
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-youtube`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ 
+            media_id: `chat_${Date.now()}`, 
+            video_url: videoUrl 
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to analyze video');
+        }
+
+        const result = await response.json();
+        
+        // Build a comprehensive response
+        let videoResponse = `## 🎥 Video Analysis\n\n`;
+        if (result.title) videoResponse += `**Title:** ${result.title}\n\n`;
+        if (result.summary) videoResponse += `**Summary:** ${result.summary}\n\n`;
+        if (result.full_text) {
+          videoResponse += `### Transcription\n${result.full_text.slice(0, 2000)}${result.full_text.length > 2000 ? '...' : ''}\n\n`;
+        }
+        if (result.key_points?.length > 0) {
+          videoResponse += `### Key Points\n${result.key_points.map((p: string) => `- ${p}`).join('\n')}\n\n`;
+        }
+        if (result.topics?.length > 0) {
+          videoResponse += `### Topics\n${result.topics.join(', ')}\n\n`;
+        }
+        videoResponse += `\n*Processed ${result.segments_count || 0} segments in ${Math.round((result.processing_time_ms || 0) / 1000)}s*`;
+
+        // Update with actual response
+        setMessages(prev => {
+          const updated = [...prev];
+          if (updated.length > 0 && updated[updated.length - 1].role === 'assistant') {
+            updated[updated.length - 1] = {
+              ...updated[updated.length - 1],
+              content: videoResponse,
+            };
+          }
+          return updated;
+        });
+
+        // Save assistant response
+        await supabase.from('chat_messages').insert({
+          session_id: sessionId,
+          role: 'assistant',
+          content: videoResponse,
+          document_id: null,
+        });
+
+        toast({
+          title: 'Video Analyzed!',
+          description: result.summary?.slice(0, 50) + '...',
+        });
+      } catch (error) {
+        const errorMsg = '❌ Could not analyze this video. ' + (error instanceof Error ? error.message : 'Please try uploading the video directly.');
+        
+        setMessages(prev => {
+          const updated = [...prev];
+          if (updated.length > 0 && updated[updated.length - 1].role === 'assistant') {
+            updated[updated.length - 1] = {
+              ...updated[updated.length - 1],
+              content: errorMsg,
+            };
+          }
+          return updated;
+        });
+
+        await supabase.from('chat_messages').insert({
+          session_id: sessionId,
+          role: 'assistant',
+          content: errorMsg,
+          document_id: null,
+        });
+      }
+      return;
+    }
+
     // Check for web search mentions first
     const searchMention = mentions?.find(m => m.type === 'search');
     if (searchMention) {

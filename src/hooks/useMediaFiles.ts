@@ -57,6 +57,7 @@ export interface MediaQA {
 }
 
 const TRANSCRIBE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-media`;
+const TRANSCRIBE_YOUTUBE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-youtube`;
 const MEDIA_QA_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/media-qa`;
 
 export function useMediaFiles() {
@@ -136,8 +137,25 @@ export function useMediaFiles() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
+      // Extract video ID for YouTube
+      let videoId = '';
+      if (sourceType === 'youtube') {
+        // Handle various YouTube URL formats
+        const patterns = [
+          /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([^&?\/]+)/,
+          /youtube\.com\/embed\/([^&?\/]+)/,
+        ];
+        for (const pattern of patterns) {
+          const match = url.match(pattern);
+          if (match) {
+            videoId = match[1];
+            break;
+          }
+        }
+      }
+
       const fileName = sourceType === 'youtube' 
-        ? `YouTube_${url.split('v=')[1]?.split('&')[0] || Date.now()}`
+        ? `YouTube_${videoId || Date.now()}`
         : new URL(url).pathname.split('/').pop() || `external_${Date.now()}`;
 
       const { data: mediaFile, error: dbError } = await supabase
@@ -158,12 +176,15 @@ export function useMediaFiles() {
 
       setMediaFiles(prev => [mediaFile as MediaFile, ...prev]);
 
-      // Note: For URLs, we'd need to download and process
-      // This is a simplified version - full implementation would need URL fetching
       toast({
-        title: 'URL Added',
-        description: `${sourceType === 'youtube' ? 'YouTube' : 'URL'} link added to processing queue`,
+        title: 'Processing Started',
+        description: `Analyzing ${sourceType === 'youtube' ? 'YouTube' : 'URL'} content...`,
       });
+
+      // Trigger YouTube transcription
+      if (sourceType === 'youtube') {
+        await triggerYouTubeTranscription(mediaFile.id, url);
+      }
 
       return mediaFile.id;
     } catch (error) {
@@ -174,6 +195,104 @@ export function useMediaFiles() {
         variant: 'destructive',
       });
       return null;
+    }
+  }, [toast]);
+
+  const triggerYouTubeTranscription = useCallback(async (mediaId: string, videoUrl: string) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Not authenticated');
+
+      const response = await fetch(TRANSCRIBE_YOUTUBE_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ 
+          video_url: videoUrl 
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'YouTube transcription failed');
+      }
+
+      const result = await response.json();
+      
+      // Save transcript to database manually since edge function doesn't do it anymore
+      if (result.full_text) {
+        const { data: transcript } = await supabase
+          .from('media_transcripts')
+          .insert({
+            media_id: mediaId,
+            full_text: result.full_text,
+            language: result.language || 'en',
+            speakers_detected: result.speakers_detected || 1,
+            processing_time_ms: result.processing_time_ms,
+          })
+          .select()
+          .single();
+
+        if (transcript && result.segments?.length > 0) {
+          await supabase.from('media_segments').insert(
+            result.segments.map((seg: { start?: number; end?: number; text?: string; speaker?: string }, idx: number) => ({
+              media_id: mediaId,
+              transcript_id: transcript.id,
+              segment_index: idx,
+              start_time: seg.start || 0,
+              end_time: seg.end || 0,
+              text: seg.text || '',
+              speaker_label: seg.speaker || null,
+              confidence: 0.9,
+            }))
+          );
+        }
+
+        // Update media file to ready
+        await supabase
+          .from('media_files')
+          .update({ 
+            status: 'ready',
+            alias: result.title || undefined,
+            duration_seconds: result.duration_estimate || null
+          })
+          .eq('id', mediaId);
+      }
+      
+      // Update local state
+      setMediaFiles(prev => prev.map(m => 
+        m.id === mediaId 
+          ? { ...m, status: 'ready' as const, alias: result.title || m.alias }
+          : m
+      ));
+
+      toast({
+        title: 'Video Analyzed!',
+        description: `${result.segments_count} segments transcribed. ${result.summary?.slice(0, 60) || ''}...`,
+      });
+
+      return result;
+    } catch (error) {
+      console.error('YouTube transcription error:', error);
+      
+      await supabase
+        .from('media_files')
+        .update({ status: 'error', error_message: error instanceof Error ? error.message : 'Failed' })
+        .eq('id', mediaId);
+      
+      setMediaFiles(prev => prev.map(m => 
+        m.id === mediaId 
+          ? { ...m, status: 'error' as const, error_message: error instanceof Error ? error.message : 'Failed' }
+          : m
+      ));
+      
+      toast({
+        title: 'Transcription Failed',
+        description: error instanceof Error ? error.message : 'Could not analyze video',
+        variant: 'destructive',
+      });
     }
   }, [toast]);
 
