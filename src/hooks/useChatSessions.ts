@@ -42,12 +42,12 @@ export function useChatSessions() {
   useEffect(() => {
     let mounted = true;
 
-    // Listen for auth changes - INITIAL_SESSION fires on page load with existing session
+    // Listen for ongoing auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
       
-      // Fetch on initial load, sign in, or token refresh
-      if ((event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session) {
+      // Fetch on sign in or token refresh
+      if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session) {
         await fetchSessions();
       } else if (event === 'SIGNED_OUT') {
         setSessions([]);
@@ -55,6 +55,9 @@ export function useChatSessions() {
         setLoading(false);
       }
     });
+
+    // Initial load (prevents loading from getting stuck on refresh)
+    fetchSessions();
 
     return () => {
       mounted = false;
