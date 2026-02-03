@@ -88,15 +88,25 @@ export function useAppSettings() {
 
   const updateKBPublicAccess = useCallback(async (enabled: boolean) => {
     try {
+      // Use upsert to handle case where setting doesn't exist yet
       const { error } = await supabase
         .from('app_settings')
-        .update({
+        .upsert({
+          setting_key: 'kb_public_access',
           setting_value: { enabled },
           updated_at: new Date().toISOString(),
-        })
-        .eq('setting_key', 'kb_public_access');
+        }, { 
+          onConflict: 'setting_key' 
+        });
 
       if (error) throw error;
+      
+      // Optimistically update local state
+      setSettings(prev => ({
+        ...prev,
+        kb_public_access: { enabled }
+      }));
+      
       return true;
     } catch (error) {
       console.error('Error updating KB access:', error);

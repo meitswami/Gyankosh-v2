@@ -53,17 +53,38 @@ export function UserSettingsModal({ open, onOpenChange, userId, userEmail, userC
 
   // Check if current user is admin using user_roles table (server-side validation)
   const [isAdmin, setIsAdmin] = useState(false);
+  const [adminCheckComplete, setAdminCheckComplete] = useState(false);
   
   useEffect(() => {
     const checkAdminRole = async () => {
-      if (!userId) return;
-      const { data } = await import('@/integrations/supabase/client').then(m => 
-        m.supabase.from('user_roles').select('role').eq('user_id', userId).eq('role', 'admin').maybeSingle()
-      );
-      setIsAdmin(!!data);
+      if (!userId) {
+        setAdminCheckComplete(true);
+        return;
+      }
+      try {
+        const { supabase } = await import('@/integrations/supabase/client');
+        const { data, error } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', userId)
+          .eq('role', 'admin')
+          .maybeSingle();
+        
+        if (error) {
+          console.error('Error checking admin role:', error);
+        }
+        setIsAdmin(!!data);
+      } catch (err) {
+        console.error('Failed to check admin status:', err);
+      } finally {
+        setAdminCheckComplete(true);
+      }
     };
-    checkAdminRole();
-  }, [userId]);
+    
+    if (open) {
+      checkAdminRole();
+    }
+  }, [userId, open]);
   const [kbAccessUpdating, setKbAccessUpdating] = useState(false);
 
   const [profileForm, setProfileForm] = useState({
