@@ -411,17 +411,54 @@ export function IndexAuthed({ user, onLogout }: IndexAuthedProps) {
             /(https?:\/\/[^\s]+youtube[^\s]+|https?:\/\/youtu\.be\/[^\s]+)/
           )?.[0] || message;
 
-        // Always create a new session for each video analysis to keep conversations separate
-        const newSession = await createSession(`🎥 Video: ${generateTitle(message)}`);
-        if (!newSession) {
-          toast({
-            title: 'Session Error',
-            description: 'Could not create chat session. Please try again.',
-            variant: 'destructive',
+        let sessionId = currentSessionId;
+        
+        // If there's an existing session, ask user if they want to continue or start fresh
+        if (currentSessionId && messages.length > 0) {
+          const { default: Swal } = await import('sweetalert2');
+          const result = await Swal.fire({
+            title: 'New Video',
+            html: `<p class="text-sm">Would you like to analyze this video in the current chat or start a new conversation?</p>`,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#f97316',
+            cancelButtonColor: '#6b7280',
+            confirmButtonText: '📝 Continue Here',
+            cancelButtonText: '🆕 New Chat',
+            background: '#ffffff',
+            color: '#1f2937',
           });
-          return;
+
+          if (result.isDismissed && result.dismiss === Swal.DismissReason.cancel) {
+            // User chose to start a new chat
+            const newSession = await createSession(`🎥 Video: ${generateTitle(message)}`);
+            if (!newSession) {
+              toast({
+                title: 'Session Error',
+                description: 'Could not create chat session. Please try again.',
+                variant: 'destructive',
+              });
+              return;
+            }
+            sessionId = newSession.id;
+          } else if (!result.isConfirmed) {
+            // User closed the dialog without choosing - cancel
+            return;
+          }
+          // If confirmed, continue with existing sessionId
+        } else {
+          // No existing session - create new one
+          const newSession = await createSession(`🎥 Video: ${generateTitle(message)}`);
+          if (!newSession) {
+            toast({
+              title: 'Session Error',
+              description: 'Could not create chat session. Please try again.',
+              variant: 'destructive',
+            });
+            return;
+          }
+          sessionId = newSession.id;
         }
-        const sessionId = newSession.id;
 
         // Add user message to UI
         setMessages((prev) => [
