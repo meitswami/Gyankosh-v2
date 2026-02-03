@@ -47,7 +47,7 @@ interface IndexAuthedProps {
 export function IndexAuthed({ user, onLogout }: IndexAuthedProps) {
   const logout = onLogout;
   const { toast } = useToast();
-  const { documents, loading: docsLoading, uploadDocument, deleteDocument, refetch } = useDocuments();
+  const { documents, loading: docsLoading, uploadDocument, deleteDocument, updateDocument, refetch } = useDocuments();
   const { messages, isLoading, sendMessage, clearMessages, setMessages } = useChat();
   const {
     sessions,
@@ -721,6 +721,7 @@ ${videoContext.transcript.slice(0, 8000)}`;
           user_id: null,
           tags: videoContext.topics || null,
           category: 'video',
+          folder_id: null,
         };
         
         response = await sendMessage(message, virtualVideoDoc);
@@ -943,6 +944,9 @@ ${videoContext.transcript.slice(0, 8000)}`;
           selectedDocument={selectedDocument}
           onSelectDocument={setSelectedDocument}
           onDeleteDocument={deleteDocument}
+          onMoveDocument={async (docId, folderId) => {
+            return await updateDocument(docId, { folder_id: folderId });
+          }}
           onCompareDocuments={() => setShowComparison(true)}
           onOpenRecorder={() => setShowRecorder(true)}
           onSelectRecording={(recording) => setSelectedRecording(recording)}
