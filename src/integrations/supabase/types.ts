@@ -284,6 +284,7 @@ export type Database = {
           file_path: string
           file_size: number | null
           file_type: string
+          folder_id: string | null
           id: string
           name: string
           summary: string | null
@@ -299,6 +300,7 @@ export type Database = {
           file_path: string
           file_size?: number | null
           file_type: string
+          folder_id?: string | null
           id?: string
           name: string
           summary?: string | null
@@ -314,6 +316,7 @@ export type Database = {
           file_path?: string
           file_size?: number | null
           file_type?: string
+          folder_id?: string | null
           id?: string
           name?: string
           summary?: string | null
@@ -321,7 +324,15 @@ export type Database = {
           updated_at?: string
           user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "documents_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "user_folders"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       friends: {
         Row: {
@@ -703,6 +714,157 @@ export type Database = {
         }
         Relationships: []
       }
+      recording_segments: {
+        Row: {
+          confidence: number | null
+          created_at: string
+          end_time: number
+          id: string
+          recording_id: string
+          segment_index: number
+          speaker_label: string | null
+          start_time: number
+          text: string
+          transcript_id: string | null
+        }
+        Insert: {
+          confidence?: number | null
+          created_at?: string
+          end_time: number
+          id?: string
+          recording_id: string
+          segment_index: number
+          speaker_label?: string | null
+          start_time: number
+          text: string
+          transcript_id?: string | null
+        }
+        Update: {
+          confidence?: number | null
+          created_at?: string
+          end_time?: number
+          id?: string
+          recording_id?: string
+          segment_index?: number
+          speaker_label?: string | null
+          start_time?: number
+          text?: string
+          transcript_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recording_segments_recording_id_fkey"
+            columns: ["recording_id"]
+            isOneToOne: false
+            referencedRelation: "recordings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recording_segments_transcript_id_fkey"
+            columns: ["transcript_id"]
+            isOneToOne: false
+            referencedRelation: "recording_transcripts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recording_transcripts: {
+        Row: {
+          created_at: string
+          edited_text: string | null
+          id: string
+          key_points: Json | null
+          language: string | null
+          original_text: string
+          recording_id: string
+          speakers_detected: number | null
+          summary: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          edited_text?: string | null
+          id?: string
+          key_points?: Json | null
+          language?: string | null
+          original_text: string
+          recording_id: string
+          speakers_detected?: number | null
+          summary?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          edited_text?: string | null
+          id?: string
+          key_points?: Json | null
+          language?: string | null
+          original_text?: string
+          recording_id?: string
+          speakers_detected?: number | null
+          summary?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recording_transcripts_recording_id_fkey"
+            columns: ["recording_id"]
+            isOneToOne: false
+            referencedRelation: "recordings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recordings: {
+        Row: {
+          created_at: string
+          duration_seconds: number | null
+          file_path: string | null
+          file_size: number | null
+          folder_id: string | null
+          id: string
+          name: string
+          status: string
+          storage_type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          duration_seconds?: number | null
+          file_path?: string | null
+          file_size?: number | null
+          folder_id?: string | null
+          id?: string
+          name: string
+          status?: string
+          storage_type?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          duration_seconds?: number | null
+          file_path?: string | null
+          file_size?: number | null
+          folder_id?: string | null
+          id?: string
+          name?: string
+          status?: string
+          storage_type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recordings_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "user_folders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       shared_chats: {
         Row: {
           created_at: string
@@ -793,6 +955,53 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      user_folders: {
+        Row: {
+          color: string | null
+          created_at: string
+          folder_type: string
+          icon: string | null
+          id: string
+          name: string
+          parent_id: string | null
+          sort_order: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          folder_type?: string
+          icon?: string | null
+          id?: string
+          name: string
+          parent_id?: string | null
+          sort_order?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          folder_type?: string
+          icon?: string | null
+          id?: string
+          name?: string
+          parent_id?: string | null
+          sort_order?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_folders_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "user_folders"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
