@@ -411,12 +411,17 @@ export function IndexAuthed({ user, onLogout }: IndexAuthedProps) {
             /(https?:\/\/[^\s]+youtube[^\s]+|https?:\/\/youtu\.be\/[^\s]+)/
           )?.[0] || message;
 
-        let sessionId = currentSessionId;
-        if (!sessionId) {
-          const newSession = await createSession(`🎥 Video: ${generateTitle(message)}`);
-          if (!newSession) return;
-          sessionId = newSession.id;
+        // Always create a new session for each video analysis to keep conversations separate
+        const newSession = await createSession(`🎥 Video: ${generateTitle(message)}`);
+        if (!newSession) {
+          toast({
+            title: 'Session Error',
+            description: 'Could not create chat session. Please try again.',
+            variant: 'destructive',
+          });
+          return;
         }
+        const sessionId = newSession.id;
 
         // Add user message to UI
         setMessages((prev) => [
