@@ -7,6 +7,7 @@ import { MarkdownRenderer } from '@/components/MarkdownRenderer';
 import { AISuggestions, parseAISuggestions } from '@/components/AISuggestions';
 import { MessageDocxExport } from '@/components/MessageDocxExport';
 import { YouTubePreview, extractYouTubeUrls } from '@/components/YouTubePreview';
+import { TranslateButton } from '@/components/TranslateButton';
 import type { ChatMessage } from '@/hooks/useChat';
 
 interface ChatAreaProps {
@@ -19,7 +20,14 @@ interface ChatAreaProps {
 export function ChatArea({ messages, isLoading, hasDocuments = false, onSendMessage }: ChatAreaProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [translatedMessages, setTranslatedMessages] = useState<Record<string, { content: string; lang: 'en' | 'hi' }>>({});
 
+  const handleTranslation = (messageId: string, translatedContent: string, language: 'en' | 'hi') => {
+    setTranslatedMessages(prev => ({
+      ...prev,
+      [messageId]: { content: translatedContent, lang: language }
+    }));
+  };
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -93,6 +101,14 @@ export function ChatArea({ messages, isLoading, hasDocuments = false, onSendMess
           const { cleanContent } = message.role === 'assistant' 
             ? parseAISuggestions(message.content)
             : { cleanContent: message.content };
+          
+          // Check for translation
+          const translation = translatedMessages[message.id];
+          const displayContent = translation?.content || cleanContent;
+          const currentLang = translation?.lang;
+
+          // Extract YouTube URLs from user message for preview
+          const youtubeUrls = extractYouTubeUrls(message.content);
 
           return (
             <div
@@ -116,13 +132,34 @@ export function ChatArea({ messages, isLoading, hasDocuments = false, onSendMess
                     {message.documentName}
                   </div>
                 )}
+                
+                {/* Show YouTube preview for messages with YouTube links */}
+                {youtubeUrls.length > 0 && (
+                  <div className="mb-3">
+                    {youtubeUrls.map((url, i) => (
+                      <YouTubePreview 
+                        key={i} 
+                        url={url} 
+                        className="max-w-sm"
+                      />
+                    ))}
+                  </div>
+                )}
+
                 {message.role === 'assistant' && isFAQContent(message.content) ? (
                   <FAQRenderer content={message.content} documentName={message.documentName} />
                 ) : message.role === 'assistant' ? (
                   <>
                     <div className="flex items-start justify-between gap-2">
-                      <MarkdownRenderer content={cleanContent} className="flex-1" />
-                      <MessageDocxExport content={cleanContent} documentName={message.documentName} />
+                      <MarkdownRenderer content={displayContent} className="flex-1" />
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <TranslateButton 
+                          content={cleanContent}
+                          onTranslated={(translated, lang) => handleTranslation(message.id, translated, lang)}
+                          currentLanguage={currentLang}
+                        />
+                        <MessageDocxExport content={displayContent} documentName={message.documentName} />
+                      </div>
                     </div>
                     {isLastAssistant && !isLoading && suggestions.length > 0 && onSendMessage && (
                       <AISuggestions 
@@ -134,14 +171,6 @@ export function ChatArea({ messages, isLoading, hasDocuments = false, onSendMess
                 ) : (
                   <div className="whitespace-pre-wrap text-sm leading-relaxed">
                     {message.content}
-                    {/* Show YouTube preview for user messages with YouTube links */}
-                    {extractYouTubeUrls(message.content).map((url, i) => (
-                      <YouTubePreview 
-                        key={i} 
-                        url={url} 
-                        className="mt-3 max-w-sm"
-                      />
-                    ))}
                   </div>
                 )}
               </div>
