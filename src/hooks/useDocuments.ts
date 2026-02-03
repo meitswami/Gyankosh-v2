@@ -38,7 +38,16 @@ export function useDocuments() {
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        const status = (error as any)?.status as number | undefined;
+        if (status === 401 || status === 403) {
+          console.warn('[auth] documents fetch unauthorized - signing out');
+          await supabase.auth.signOut();
+          setDocuments([]);
+          return;
+        }
+        throw error;
+      }
       setDocuments(data || []);
     } catch (error) {
       console.error('Error fetching documents:', error);
