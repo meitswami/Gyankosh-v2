@@ -244,49 +244,54 @@ Format as JSON array:
       
       // Rich formatting instructions for professional documents
       const formattingInstruction = `
-## Formatting Guidelines:
-Use proper markdown formatting to structure your responses professionally:
+## Response Format Guidelines:
+IMPORTANT: Answer naturally with sentences, paragraphs, and structured formatting. Do NOT generate FAQ format unless the user explicitly asks for FAQs.
 
-### For Letters, Emails & Formal Documents:
-- Start with proper salutation (Dear Sir/Madam, To Whom It May Concern, etc.)
-- Include subject line in bold: **Subject: [topic]**
-- Use proper paragraph breaks
-- End with appropriate closing (Yours sincerely, Best regards, etc.)
-- Include signature block with name/designation placeholders
-
-### For Data & Analysis:
-- Use markdown tables for tabular data:
-  | Column 1 | Column 2 | Column 3 |
-  |----------|----------|----------|
-  | Data     | Data     | Data     |
-- Use proper headings (# H1, ## H2, ### H3, etc.) for sections
-- Use **bold** for emphasis and key terms
-- Use *italics* for technical terms or document references
+### Standard Response Format (Default):
+- Use clear paragraphs with proper spacing
+- Use **bold** for key terms and emphasis
+- Use *italics* for technical terms or citations
+- Use bullet points (- or *) for lists of items
 - Use numbered lists (1. 2. 3.) for steps or procedures
-- Use bullet points (- or *) for features or items
 - Use > blockquotes for important notes or excerpts
 - Use \`code\` formatting for technical terms
 
-### For Professional Reports:
-- Include executive summary for long responses
-- Use clear section headings
-- Include key highlights in bold
-- Add relevant citations from documents
+### For Tables & Data:
+| Column 1 | Column 2 | Column 3 |
+|----------|----------|----------|
+| Data     | Data     | Data     |
 
-### Text Alignment & Structure:
-- Use horizontal rules (---) to separate major sections
-- Keep paragraphs focused and well-spaced
-- Use indentation through nested lists when needed`;
+### For Headings (use sparingly):
+- ## Section Heading
+- ### Sub-heading
+
+### For Letters, Emails & Formal Documents:
+- Start with proper salutation
+- Include **Subject:** line in bold
+- Use proper paragraph breaks
+- End with appropriate closing and signature
+
+### ONLY Use FAQ Format When:
+The user explicitly asks for:
+- "Generate FAQs"
+- "Create FAQ"
+- "FAQ बनाओ"
+- "सवाल-जवाब बनाओ"
+
+### Text Structure:
+- Use --- horizontal rules between major sections
+- Keep responses conversational yet informative
+- Answer directly first, then provide details
+- Cite document sources when referencing specific content`;
 
       const suggestionInstruction = `
 
-After your main answer, add a section with 2-3 related follow-up questions the user might want to ask.
-Format them like this:
+After your main answer, add 2-3 follow-up questions:
 ---
-**Related questions:**
-- [First follow-up question]
-- [Second follow-up question]
-- [Third follow-up question]`;
+**संबंधित प्रश्न / Related:**
+- [Question 1]
+- [Question 2]
+- [Question 3]`;
       
       if (!hasDocuments) {
         // General chat mode - no documents, like ChatGPT

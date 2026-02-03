@@ -185,9 +185,9 @@ export function YouTubePreview({
         {/* Action buttons */}
         <div className="flex items-center gap-2 pt-2">
           <Button
-            variant="outline"
+            variant="default"
             size="sm"
-            className="flex-1 text-xs"
+            className="flex-1 text-xs bg-red-600 hover:bg-white hover:text-red-600 border border-red-600 text-white transition-colors"
             onClick={() => window.open(url, '_blank')}
           >
             <ExternalLink className="w-3 h-3 mr-1" />
@@ -195,9 +195,9 @@ export function YouTubePreview({
           </Button>
           {onAnalyze && !analysisResult && (
             <Button
-              variant="default"
+              variant="outline"
               size="sm"
-              className="flex-1 text-xs"
+              className="flex-1 text-xs border-primary hover:bg-primary hover:text-primary-foreground"
               onClick={onAnalyze}
               disabled={isAnalyzing}
             >
