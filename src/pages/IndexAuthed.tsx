@@ -109,6 +109,8 @@ export function IndexAuthed({ user, onLogout }: IndexAuthedProps) {
       loadingSessionRef.current = null;
       setIsLoadingMessages(false);
       clearMessages();
+      // Clear video context when session changes
+      setVideoContext(null);
       return;
     }
 
@@ -390,6 +392,9 @@ export function IndexAuthed({ user, onLogout }: IndexAuthedProps) {
       const youtubeMatch = message.match(youtubePattern);
 
       if (youtubeMatch) {
+        // Clear previous video context when processing a new video
+        setVideoContext(null);
+        
         // Handle YouTube video analysis
         const videoUrl =
           message.match(
@@ -643,40 +648,47 @@ export function IndexAuthed({ user, onLogout }: IndexAuthedProps) {
         return;
       }
 
-      // Allow global search when no document is selected (searches all documents)
-      const isGlobalSearch = !selectedDocument;
+      // Regular message handling (non-YouTube, non-search)
+      try {
+        // Allow global search when no document is selected (searches all documents)
+        const isGlobalSearch = !selectedDocument;
 
-      let sessionId = currentSessionId;
+        let sessionId = currentSessionId;
 
-      // Create new session if needed
-      if (!sessionId) {
-        const title = isGlobalSearch
-          ? `🔍 ${generateTitle(message)}`
-          : generateTitle(message);
-        const newSession = await createSession(title);
-        if (!newSession) return;
-        sessionId = newSession.id;
-      } else if (messages.length === 0) {
-        // Update title with first message
-        const title = isGlobalSearch
-          ? `🔍 ${generateTitle(message)}`
-          : generateTitle(message);
-        await updateSessionTitle(sessionId, title);
-      }
+        // Create new session if needed
+        if (!sessionId) {
+          const title = isGlobalSearch
+            ? `🔍 ${generateTitle(message)}`
+            : generateTitle(message);
+          const newSession = await createSession(title);
+          if (!newSession) return;
+          sessionId = newSession.id;
+        } else if (messages.length === 0) {
+          // Update title with first message
+          const title = isGlobalSearch
+            ? `🔍 ${generateTitle(message)}`
+            : generateTitle(message);
+          await updateSessionTitle(sessionId, title);
+        }
 
-      // Save user message to DB
-      await supabase.from('chat_messages').insert({
-        session_id: sessionId,
-        role: 'user',
-        content: message,
-        document_id: selectedDocument?.id || null,
-      });
+        // Save user message to DB
+        const { error: insertError } = await supabase.from('chat_messages').insert({
+          session_id: sessionId,
+          role: 'user',
+          content: message,
+          document_id: selectedDocument?.id || null,
+        });
+        
+        if (insertError) {
+          console.error('Error saving user message:', insertError);
+        }
 
       // For global search, use semantic search for faster results
       let response: string | null;
       
       // Check if we have video context from a previous YouTube analysis
-      if (videoContext && videoContext.transcript) {
+      // Only use video context for follow-up questions if there's meaningful transcript
+      if (videoContext && videoContext.transcript && videoContext.transcript.length > 10) {
         // Use video context for follow-up questions
         const videoDocContent = `--- Video: ${videoContext.title} ---
 Summary: ${videoContext.summary || 'No summary available'}
@@ -685,22 +697,23 @@ Topics: ${videoContext.topics?.join(', ') || 'Not specified'}
 Transcript:
 ${videoContext.transcript.slice(0, 8000)}`;
         
-        response = await sendMessage(
-          message,
-          {
-            id: 'video',
-            name: videoContext.title,
-            alias: `🎥 ${videoContext.title}`,
-            content_text: videoDocContent,
-            file_path: '',
-            file_type: 'video',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            user_id: null,
-            tags: videoContext.topics || null,
-            category: 'video',
-          } as Document
-        );
+        const virtualVideoDoc: Document = {
+          id: 'video-context',
+          name: videoContext.title,
+          alias: `🎥 ${videoContext.title}`,
+          content_text: videoDocContent,
+          file_path: '',
+          file_type: 'video',
+          file_size: 0,
+          summary: videoContext.summary || null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          user_id: null,
+          tags: videoContext.topics || null,
+          category: 'video',
+        };
+        
+        response = await sendMessage(message, virtualVideoDoc);
       } else if (isGlobalSearch && documents.length > 0) {
         // Try semantic search first for faster results
         let relevantDocs = '';
@@ -784,12 +797,20 @@ ${videoContext.transcript.slice(0, 8000)}`;
       }
 
       // Save assistant response to DB
-      if (response) {
-        await supabase.from('chat_messages').insert({
-          session_id: sessionId,
-          role: 'assistant',
-          content: response,
-          document_id: selectedDocument?.id || null,
+        if (response) {
+          await supabase.from('chat_messages').insert({
+            session_id: sessionId,
+            role: 'assistant',
+            content: response,
+            document_id: selectedDocument?.id || null,
+          });
+        }
+      } catch (error) {
+        console.error('Error in message handling:', error);
+        toast({
+          title: 'Error',
+          description: error instanceof Error ? error.message : 'Failed to send message',
+          variant: 'destructive',
         });
       }
     },
