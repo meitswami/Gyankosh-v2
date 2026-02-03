@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -8,9 +8,33 @@ export function useAuth() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const initTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     let mounted = true;
+
+    const finishLoading = () => {
+      if (!mounted) return;
+      setLoading(false);
+      if (initTimeoutRef.current) {
+        window.clearTimeout(initTimeoutRef.current);
+        initTimeoutRef.current = null;
+      }
+    };
+
+    // Hard timeout: never allow auth loading to hang forever.
+    // If we can't restore a session quickly, we force sign-out and send user to login.
+    initTimeoutRef.current = window.setTimeout(() => {
+      if (!mounted) return;
+      console.warn('[auth] init timeout - forcing logout');
+      setSession(null);
+      setUser(null);
+      finishLoading();
+      // best-effort signout (clears any broken refresh state)
+      supabase.auth.signOut().finally(() => {
+        if (mounted) navigate('/auth', { replace: true });
+      });
+    }, 4000);
 
     // Listener for ongoing auth changes (does NOT control initial loading)
     const {
@@ -21,8 +45,23 @@ export function useAuth() {
       setSession(session);
       setUser(session?.user ?? null);
 
+      // INITIAL_SESSION is the most reliable signal that the client hydrated auth state.
+      if (event === 'INITIAL_SESSION') {
+        finishLoading();
+        if (!session) {
+          navigate('/auth', { replace: true });
+        }
+        return;
+      }
+
+      if (event === 'TOKEN_REFRESHED') {
+        // If we were stuck waiting, this also unblocks UI
+        finishLoading();
+      }
+
       if (event === 'SIGNED_OUT') {
-        navigate('/auth');
+        finishLoading();
+        navigate('/auth', { replace: true });
       }
     });
 
@@ -38,10 +77,18 @@ export function useAuth() {
         setUser(session?.user ?? null);
 
         if (!session) {
-          navigate('/auth');
+          navigate('/auth', { replace: true });
         }
+      } catch (e) {
+        console.error('[auth] getSession failed - forcing logout', e);
+        setSession(null);
+        setUser(null);
+        supabase.auth.signOut().catch(() => {
+          // ignore
+        });
+        if (mounted) navigate('/auth', { replace: true });
       } finally {
-        if (mounted) setLoading(false);
+        finishLoading();
       }
     };
 
@@ -49,6 +96,10 @@ export function useAuth() {
 
     return () => {
       mounted = false;
+      if (initTimeoutRef.current) {
+        window.clearTimeout(initTimeoutRef.current);
+        initTimeoutRef.current = null;
+      }
       subscription.unsubscribe();
     };
   }, [navigate]);

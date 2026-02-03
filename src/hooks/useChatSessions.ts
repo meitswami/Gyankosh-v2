@@ -25,19 +25,31 @@ export function useChatSessions() {
       return;
     }
 
-    const { data, error } = await supabase
-      .from('chat_sessions')
-      .select('*')
-      .order('updated_at', { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from('chat_sessions')
+        .select('*')
+        .order('updated_at', { ascending: false });
 
-    if (error) {
-      console.error('Error fetching sessions:', error);
+      if (error) {
+        // If token is invalid/expired, force logout so UI never gets stuck.
+        const status = (error as any)?.status as number | undefined;
+        if (status === 401 || status === 403) {
+          console.warn('[auth] chat sessions fetch unauthorized - signing out');
+          await supabase.auth.signOut();
+          setSessions([]);
+          setCurrentSessionId(null);
+          return;
+        }
+
+        console.error('Error fetching sessions:', error);
+        return;
+      }
+
+      setSessions(data || []);
+    } finally {
       setLoading(false);
-      return;
     }
-
-    setSessions(data || []);
-    setLoading(false);
   }, []);
 
   useEffect(() => {
