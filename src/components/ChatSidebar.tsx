@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { MessageSquare, Plus, Trash2, BookOpen, ChevronDown, ChevronUp, LogOut, GitCompare, Share2, Search, Video } from 'lucide-react';
+import { MessageSquare, Plus, Trash2, BookOpen, ChevronDown, ChevronUp, LogOut, GitCompare, Share2, Search, Video, PanelLeftClose, PanelLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -16,6 +16,7 @@ import { DocumentViewerModal } from '@/components/DocumentViewerModal';
 import { highlightText, getMatchContext } from '@/lib/highlightText';
 import { supabase } from '@/integrations/supabase/client';
 import Swal from 'sweetalert2';
+import { SessionTimer } from '@/components/SessionTimer';
 
 // Helper to check if session is a video chat
 function isVideoSession(title: string): boolean {
@@ -36,6 +37,12 @@ interface ChatSidebarProps {
   onCompareDocuments?: () => void;
   onToggleKnowledgeBase?: () => void;
   loading: boolean;
+  // New props for user info and collapse
+  userName?: string;
+  userEmail?: string;
+  loginTime?: Date;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
 function formatFileSize(bytes: number): string {
@@ -55,6 +62,11 @@ export function ChatSidebar({
   onCompareDocuments,
   onToggleKnowledgeBase,
   loading,
+  userName,
+  userEmail,
+  loginTime,
+  isCollapsed = false,
+  onToggleCollapse,
 }: ChatSidebarProps) {
   const [knowledgeBaseOpen, setKnowledgeBaseOpen] = useState(false);
   const [docSearchQuery, setDocSearchQuery] = useState('');
@@ -143,13 +155,18 @@ export function ChatSidebar({
       });
 
       if (result.isConfirmed) {
-        // Clear local storage
+        // Clear all local storage items
         localStorage.removeItem('gyaankosh_logged_in');
         localStorage.removeItem('gyaankosh_user');
         localStorage.removeItem('privateKey');
+        localStorage.removeItem('gyaankosh_login_time');
         
-        // Sign out from Supabase
-        await supabase.auth.signOut();
+        // Sign out from Supabase - this terminates the session
+        const { error } = await supabase.auth.signOut({ scope: 'global' });
+        
+        if (error) {
+          console.error('Supabase signOut error:', error);
+        }
         
         await Swal.fire({
           title: 'Logged Out!',
@@ -161,16 +178,15 @@ export function ChatSidebar({
           color: '#1f2937',
         });
         
-        navigate('/auth');
+        // Force hard redirect to ensure complete session cleanup
+        window.location.href = '/auth';
       }
     } catch (error) {
       console.error('Logout error:', error);
       // Fallback: still logout even if SweetAlert fails
-      localStorage.removeItem('gyaankosh_logged_in');
-      localStorage.removeItem('gyaankosh_user');
-      localStorage.removeItem('privateKey');
-      await supabase.auth.signOut();
-      navigate('/auth');
+      localStorage.clear();
+      await supabase.auth.signOut({ scope: 'global' });
+      window.location.href = '/auth';
     }
   };
 
@@ -246,6 +262,53 @@ export function ChatSidebar({
     }
   };
 
+  // If collapsed, show minimal sidebar
+  if (isCollapsed) {
+    return (
+      <aside className="w-14 border-r border-border bg-sidebar flex flex-col h-full items-center py-4">
+        <TooltipProvider delayDuration={200}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onToggleCollapse}
+                className="h-10 w-10 mb-4"
+              >
+                <PanelLeft className="w-5 h-5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">Expand sidebar</TooltipContent>
+          </Tooltip>
+          
+          <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center mb-4">
+            <BookOpen className="w-5 h-5 text-primary" />
+          </div>
+          
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" onClick={onNewChat} className="h-9 w-9 mb-2">
+                <Plus className="w-4 h-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">New Chat</TooltipContent>
+          </Tooltip>
+          
+          <div className="flex-1" />
+          
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" onClick={handleLogout} className="h-9 w-9">
+                <LogOut className="w-4 h-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">Logout</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      </aside>
+    );
+  }
+
   return (
     <aside className="w-72 border-r border-border bg-sidebar flex flex-col h-full">
       {/* Header */}
@@ -260,9 +323,16 @@ export function ChatSidebar({
               <p className="text-[10px] text-muted-foreground/60">Treasury of Knowledge</p>
             </div>
           </div>
-          <Button variant="ghost" size="icon" onClick={handleLogout} className="h-8 w-8">
-            <LogOut className="w-4 h-4" />
-          </Button>
+          <div className="flex items-center gap-1">
+            {onToggleCollapse && (
+              <Button variant="ghost" size="icon" onClick={onToggleCollapse} className="h-8 w-8">
+                <PanelLeftClose className="w-4 h-4" />
+              </Button>
+            )}
+            <Button variant="ghost" size="icon" onClick={handleLogout} className="h-8 w-8">
+              <LogOut className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -481,8 +551,16 @@ export function ChatSidebar({
         </div>
       </ScrollArea>
 
-      {/* Footer */}
-      <div className="p-3 border-t border-sidebar-border space-y-1">
+      {/* Footer with session info */}
+      <div className="p-3 border-t border-sidebar-border space-y-2">
+        {/* Session Timer and User Name */}
+        {loginTime && (
+          <SessionTimer 
+            loginTime={loginTime} 
+            userName={userName} 
+            userEmail={userEmail} 
+          />
+        )}
         <p className="text-xs text-muted-foreground text-center">
           Type <span className="font-mono bg-muted px-1 py-0.5 rounded">#</span> to reference documents
         </p>

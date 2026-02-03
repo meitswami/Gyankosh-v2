@@ -74,6 +74,36 @@ export function IndexAuthed({ user, onLogout }: IndexAuthedProps) {
   const [showRecorder, setShowRecorder] = useState(false);
   const [selectedRecording, setSelectedRecording] = useState<Recording | null>(null);
   const [useFolderView, setUseFolderView] = useState(true); // Use folder sidebar by default
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  
+  // Track login time for session timer
+  const [loginTime] = useState<Date>(() => {
+    const stored = localStorage.getItem('gyaankosh_login_time');
+    if (stored) {
+      return new Date(stored);
+    }
+    const now = new Date();
+    localStorage.setItem('gyaankosh_login_time', now.toISOString());
+    return now;
+  });
+  
+  // Get user display name from localStorage settings
+  const getUserDisplayName = () => {
+    const stored = localStorage.getItem(`user_settings_${user.id}`);
+    if (stored) {
+      try {
+        const settings = JSON.parse(stored);
+        const firstName = settings.first_name || '';
+        const lastName = settings.last_name || '';
+        if (firstName || lastName) {
+          return `${firstName} ${lastName}`.trim();
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+    return undefined;
+  };
   
   // Store last analyzed video context for follow-up questions
   const [videoContext, setVideoContext] = useState<{
@@ -1005,6 +1035,11 @@ ${videoContext.transcript.slice(0, 8000)}`;
           onDeleteDocument={deleteDocument}
           onCompareDocuments={() => setShowComparison(true)}
           loading={sessionsLoading || docsLoading}
+          userName={getUserDisplayName()}
+          userEmail={user.email}
+          loginTime={loginTime}
+          isCollapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
         />
       )}
 
