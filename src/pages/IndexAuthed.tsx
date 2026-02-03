@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, startTransition } from 'react';
-import { Eye, LogOut, FileSpreadsheet, Bell, Settings, Users } from 'lucide-react';
+import { Eye, LogOut, FileSpreadsheet, Bell, Settings, Users, Mic } from 'lucide-react';
 import type { User } from '@supabase/supabase-js';
 import { useToast } from '@/hooks/use-toast';
 import { useDocuments, type Document } from '@/hooks/useDocuments';
@@ -10,6 +10,7 @@ import { useBatchUpload } from '@/hooks/useBatchUpload';
 import { useUserPresence } from '@/hooks/useUserPresence';
 import { useApiIntegrations } from '@/hooks/useApiIntegrations';
 import { useWebSearch } from '@/hooks/useWebSearch';
+import { useRecordings, type Recording } from '@/hooks/useRecordings';
 import { extractTextFromFile } from '@/lib/documentParser';
 import { ChatSidebar } from '@/components/ChatSidebar';
 import { ChatArea } from '@/components/ChatArea';
@@ -26,6 +27,9 @@ import { ChatWidget } from '@/components/ChatWidget';
 import { UserSettingsModal } from '@/components/UserSettingsModal';
 import { GroupChatPanel } from '@/components/GroupChatPanel';
 import { OnboardingTour, useOnboardingTour } from '@/components/OnboardingTour';
+import { LiveRecorder } from '@/components/LiveRecorder';
+import { RecordingViewer } from '@/components/RecordingViewer';
+import { FolderSidebar } from '@/components/FolderSidebar';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
@@ -67,6 +71,9 @@ export function IndexAuthed({ user, onLogout }: IndexAuthedProps) {
   const [showSettings, setShowSettings] = useState(false);
   const [showGroupChat, setShowGroupChat] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [showRecorder, setShowRecorder] = useState(false);
+  const [selectedRecording, setSelectedRecording] = useState<Recording | null>(null);
+  const [useFolderView, setUseFolderView] = useState(true); // Use folder sidebar by default
   
   // Store last analyzed video context for follow-up questions
   const [videoContext, setVideoContext] = useState<{
@@ -84,6 +91,9 @@ export function IndexAuthed({ user, onLogout }: IndexAuthedProps) {
 
   // Web search
   const { search: webSearch, isSearching } = useWebSearch();
+
+  // Recordings
+  const { recordings, loading: recordingsLoading } = useRecordings();
 
   // Onboarding tour
   const { showTour, completeTour } = useOnboardingTour();
@@ -925,18 +935,32 @@ ${videoContext.transcript.slice(0, 8000)}`;
 
   return (
     <div className="h-screen flex bg-background">
-      {/* Sidebar with Chat History */}
-      <ChatSidebar
-        sessions={sessions}
-        currentSessionId={currentSessionId}
-        onSelectSession={handleSelectSession}
-        onNewChat={handleNewChat}
-        onDeleteSession={deleteSession}
-        documents={documents}
-        onDeleteDocument={deleteDocument}
-        onCompareDocuments={() => setShowComparison(true)}
-        loading={sessionsLoading || docsLoading}
-      />
+      {/* Sidebar - Folder View (default) or Chat History */}
+      {useFolderView ? (
+        <FolderSidebar
+          documents={documents}
+          recordings={recordings}
+          selectedDocument={selectedDocument}
+          onSelectDocument={setSelectedDocument}
+          onDeleteDocument={deleteDocument}
+          onCompareDocuments={() => setShowComparison(true)}
+          onOpenRecorder={() => setShowRecorder(true)}
+          onSelectRecording={(recording) => setSelectedRecording(recording)}
+          loading={docsLoading || recordingsLoading}
+        />
+      ) : (
+        <ChatSidebar
+          sessions={sessions}
+          currentSessionId={currentSessionId}
+          onSelectSession={handleSelectSession}
+          onNewChat={handleNewChat}
+          onDeleteSession={deleteSession}
+          documents={documents}
+          onDeleteDocument={deleteDocument}
+          onCompareDocuments={() => setShowComparison(true)}
+          loading={sessionsLoading || docsLoading}
+        />
+      )}
 
       {/* Main Chat Area */}
       <main className="flex-1 flex flex-col h-full overflow-hidden">
@@ -988,6 +1012,16 @@ ${videoContext.transcript.slice(0, 8000)}`;
                 onExport={() => exportButtonRef.current?.click()}
                 onToggleKnowledgeBase={() => {}}
               />
+              <Button
+                variant={showRecorder ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setShowRecorder(true)}
+                className="gap-1.5"
+                title="Live Recording with Transcription"
+              >
+                <Mic className="w-4 h-4" />
+                <span className="hidden sm:inline">Record</span>
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
@@ -1125,6 +1159,38 @@ ${videoContext.transcript.slice(0, 8000)}`;
 
       {/* Onboarding Tour */}
       {showTour && <OnboardingTour onComplete={completeTour} />}
+
+      {/* Live Recorder Modal */}
+      {showRecorder && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <LiveRecorder
+            onClose={() => setShowRecorder(false)}
+            onTranscriptReady={(recordingId, transcript) => {
+              // Optionally add transcript to chat context
+              toast({
+                title: '🎙️ Recording saved!',
+                description: 'Transcript is ready for Q&A',
+              });
+            }}
+          />
+        </div>
+      )}
+
+      {/* Recording Viewer Modal */}
+      {selectedRecording && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <RecordingViewer
+            recording={selectedRecording}
+            onClose={() => setSelectedRecording(null)}
+            onAskQuestion={(question, context) => {
+              // Send question with recording context to chat
+              const contextMessage = `Based on this recording transcript:\n\n${context.slice(0, 2000)}...\n\nQuestion: ${question}`;
+              handleSendMessage(contextMessage);
+              setSelectedRecording(null);
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }
