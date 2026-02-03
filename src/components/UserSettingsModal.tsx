@@ -51,8 +51,19 @@ export function UserSettingsModal({ open, onOpenChange, userId, userEmail, userC
   const { integrations, addIntegration, deleteIntegration, updateIntegration } = useApiIntegrations(userId);
   const { isKBPublicAccessEnabled, updateKBPublicAccess } = useAppSettings();
 
-  // Check if current user is admin
-  const isAdmin = userEmail === 'test@genxai.com';
+  // Check if current user is admin using user_roles table (server-side validation)
+  const [isAdmin, setIsAdmin] = useState(false);
+  
+  useEffect(() => {
+    const checkAdminRole = async () => {
+      if (!userId) return;
+      const { data } = await import('@/integrations/supabase/client').then(m => 
+        m.supabase.from('user_roles').select('role').eq('user_id', userId).eq('role', 'admin').maybeSingle()
+      );
+      setIsAdmin(!!data);
+    };
+    checkAdminRole();
+  }, [userId]);
   const [kbAccessUpdating, setKbAccessUpdating] = useState(false);
 
   const [profileForm, setProfileForm] = useState({
