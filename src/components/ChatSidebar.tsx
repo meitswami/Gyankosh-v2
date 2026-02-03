@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { MessageSquare, Plus, Trash2, BookOpen, ChevronDown, ChevronUp, LogOut, GitCompare, Share2, Search } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { MessageSquare, Plus, Trash2, BookOpen, ChevronDown, ChevronUp, LogOut, GitCompare, Share2, Search, Video } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -16,6 +16,14 @@ import { DocumentViewerModal } from '@/components/DocumentViewerModal';
 import { highlightText, getMatchContext } from '@/lib/highlightText';
 import { supabase } from '@/integrations/supabase/client';
 import Swal from 'sweetalert2';
+
+// Helper to check if session is a video chat
+function isVideoSession(title: string): boolean {
+  return title.startsWith('🎥');
+}
+
+// Cache for video thumbnails fetched from first message
+const thumbnailCache: Record<string, string> = {};
 
 interface ChatSidebarProps {
   sessions: ChatSession[];
@@ -53,7 +61,49 @@ export function ChatSidebar({
   const [chatSearchQuery, setChatSearchQuery] = useState('');
   const [shareDocument, setShareDocument] = useState<Document | null>(null);
   const [viewDocument, setViewDocument] = useState<Document | null>(null);
+  const [videoThumbnails, setVideoThumbnails] = useState<Record<string, string>>({});
   const navigate = useNavigate();
+
+  // Fetch video thumbnails for video sessions
+  useEffect(() => {
+    const fetchThumbnails = async () => {
+      const videoSessions = sessions.filter(s => isVideoSession(s.title));
+      
+      for (const session of videoSessions) {
+        // Skip if already cached
+        if (thumbnailCache[session.id] || videoThumbnails[session.id]) continue;
+        
+        try {
+          // Fetch first message to get YouTube URL
+          const { data: messages } = await supabase
+            .from('chat_messages')
+            .select('content')
+            .eq('session_id', session.id)
+            .eq('role', 'user')
+            .order('created_at', { ascending: true })
+            .limit(1);
+          
+          if (messages && messages.length > 0) {
+            const content = messages[0].content;
+            // Extract YouTube video ID
+            const match = content.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]+)/);
+            if (match) {
+              const videoId = match[1];
+              const thumbnailUrl = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+              thumbnailCache[session.id] = thumbnailUrl;
+              setVideoThumbnails(prev => ({ ...prev, [session.id]: thumbnailUrl }));
+            }
+          }
+        } catch (err) {
+          console.error('Error fetching thumbnail for session:', session.id, err);
+        }
+      }
+    };
+    
+    if (sessions.length > 0) {
+      fetchThumbnails();
+    }
+  }, [sessions]);
 
   // Filter documents by search query
   const filteredDocuments = useMemo(() => {
@@ -361,7 +411,11 @@ export function ChatSidebar({
             </div>
           ) : (
             <TooltipProvider delayDuration={300}>
-              {filteredSessions.map((session) => (
+              {filteredSessions.map((session) => {
+                const isVideo = isVideoSession(session.title);
+                const thumbnail = videoThumbnails[session.id] || thumbnailCache[session.id];
+                
+                return (
                 <Tooltip key={session.id}>
                   <TooltipTrigger asChild>
                     <div
@@ -374,8 +428,26 @@ export function ChatSidebar({
                       `}
                       onClick={() => onSelectSession(session.id)}
                     >
-                      <div className="flex items-center gap-3">
-                        <MessageSquare className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                      <div className="flex items-start gap-3">
+                        {/* Video thumbnail or icon */}
+                        {isVideo && thumbnail ? (
+                          <div className="w-12 h-8 rounded overflow-hidden flex-shrink-0 bg-muted">
+                            <img 
+                              src={thumbnail} 
+                              alt="Video thumbnail" 
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                              }}
+                            />
+                          </div>
+                        ) : isVideo ? (
+                          <div className="w-8 h-8 rounded bg-red-500/10 flex items-center justify-center flex-shrink-0">
+                            <Video className="w-4 h-4 text-red-500" />
+                          </div>
+                        ) : (
+                          <MessageSquare className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-0.5" />
+                        )}
                         <div className="flex-1 min-w-0">
                           <span className="text-sm text-sidebar-foreground truncate block">
                             {chatSearchQuery ? highlightText(session.title, chatSearchQuery) : session.title}
@@ -402,7 +474,8 @@ export function ChatSidebar({
                     Started: {format(new Date(session.created_at), 'MMM d, yyyy • h:mm a')}
                   </TooltipContent>
                 </Tooltip>
-              ))}
+              );
+              })}
             </TooltipProvider>
           )}
         </div>

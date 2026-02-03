@@ -8,6 +8,7 @@ import { AISuggestions, parseAISuggestions } from '@/components/AISuggestions';
 import { MessageDocxExport } from '@/components/MessageDocxExport';
 import { YouTubePreview, extractYouTubeUrls } from '@/components/YouTubePreview';
 import { TranslateButton } from '@/components/TranslateButton';
+import { ShowSuggestionsButton } from '@/components/ShowSuggestionsButton';
 import type { ChatMessage } from '@/hooks/useChat';
 
 interface ChatAreaProps {
@@ -20,6 +21,7 @@ interface ChatAreaProps {
 export function ChatArea({ messages, isLoading, hasDocuments = false, onSendMessage }: ChatAreaProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [messageSuggestions, setMessageSuggestions] = useState<Record<string, string[]>>({});
   const [translatedMessages, setTranslatedMessages] = useState<Record<string, { content: string; lang: 'en' | 'hi' }>>({});
 
   const handleTranslation = (messageId: string, translatedContent: string, language: 'en' | 'hi') => {
@@ -28,13 +30,21 @@ export function ChatArea({ messages, isLoading, hasDocuments = false, onSendMess
       [messageId]: { content: translatedContent, lang: language }
     }));
   };
+
+  const handleSuggestionsLoaded = (messageId: string, loadedSuggestions: string[]) => {
+    setMessageSuggestions(prev => ({
+      ...prev,
+      [messageId]: loadedSuggestions
+    }));
+  };
+
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
 
-  // Parse suggestions from the last assistant message
+  // Parse suggestions from the last assistant message (kept for backward compatibility)
   useEffect(() => {
     if (messages.length > 0) {
       const lastMessage = messages[messages.length - 1];
@@ -49,6 +59,7 @@ export function ChatArea({ messages, isLoading, hasDocuments = false, onSendMess
     if (onSendMessage) {
       onSendMessage(suggestion);
       setSuggestions([]);
+      setMessageSuggestions({});
     }
   };
 
@@ -161,12 +172,21 @@ export function ChatArea({ messages, isLoading, hasDocuments = false, onSendMess
                         <MessageDocxExport content={displayContent} documentName={message.documentName} />
                       </div>
                     </div>
-                    {isLastAssistant && !isLoading && suggestions.length > 0 && onSendMessage && (
-                      <AISuggestions 
-                        suggestions={suggestions} 
-                        onSelectSuggestion={handleSuggestionClick} 
-                      />
-                    )}
+                    {/* Show suggestions button and on-demand suggestions */}
+                    <div className="mt-2 flex flex-col gap-2">
+                      {!messageSuggestions[message.id] && onSendMessage && (
+                        <ShowSuggestionsButton 
+                          content={cleanContent}
+                          onSuggestionsLoaded={(s) => handleSuggestionsLoaded(message.id, s)}
+                        />
+                      )}
+                      {messageSuggestions[message.id] && onSendMessage && (
+                        <AISuggestions 
+                          suggestions={messageSuggestions[message.id]} 
+                          onSelectSuggestion={handleSuggestionClick} 
+                        />
+                      )}
+                    </div>
                   </>
                 ) : (
                   <div className="whitespace-pre-wrap text-sm leading-relaxed">
