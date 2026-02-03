@@ -67,6 +67,14 @@ export function IndexAuthed({ user, onLogout }: IndexAuthedProps) {
   const [showSettings, setShowSettings] = useState(false);
   const [showGroupChat, setShowGroupChat] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  
+  // Store last analyzed video context for follow-up questions
+  const [videoContext, setVideoContext] = useState<{
+    title: string;
+    transcript: string;
+    summary?: string;
+    topics?: string[];
+  } | null>(null);
 
   // User presence and friends
   const { friends } = useUserPresence();
@@ -517,6 +525,14 @@ export function IndexAuthed({ user, onLogout }: IndexAuthedProps) {
             document_id: null,
           });
 
+          // Store video context for follow-up questions
+          setVideoContext({
+            title: result.title || 'YouTube Video',
+            transcript: result.full_text || '',
+            summary: result.summary,
+            topics: result.topics,
+          });
+
           toast({
             title: 'Video Analyzed!',
             description: result.summary?.slice(0, 50) + '...',
@@ -658,7 +674,34 @@ export function IndexAuthed({ user, onLogout }: IndexAuthedProps) {
 
       // For global search, use semantic search for faster results
       let response: string | null;
-      if (isGlobalSearch && documents.length > 0) {
+      
+      // Check if we have video context from a previous YouTube analysis
+      if (videoContext && videoContext.transcript) {
+        // Use video context for follow-up questions
+        const videoDocContent = `--- Video: ${videoContext.title} ---
+Summary: ${videoContext.summary || 'No summary available'}
+Topics: ${videoContext.topics?.join(', ') || 'Not specified'}
+
+Transcript:
+${videoContext.transcript.slice(0, 8000)}`;
+        
+        response = await sendMessage(
+          message,
+          {
+            id: 'video',
+            name: videoContext.title,
+            alias: `🎥 ${videoContext.title}`,
+            content_text: videoDocContent,
+            file_path: '',
+            file_type: 'video',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            user_id: null,
+            tags: videoContext.topics || null,
+            category: 'video',
+          } as Document
+        );
+      } else if (isGlobalSearch && documents.length > 0) {
         // Try semantic search first for faster results
         let relevantDocs = '';
         try {
@@ -762,6 +805,7 @@ export function IndexAuthed({ user, onLogout }: IndexAuthedProps) {
       toast,
       updateSessionTitle,
       webSearch,
+      videoContext,
     ]
   );
 
@@ -824,6 +868,7 @@ export function IndexAuthed({ user, onLogout }: IndexAuthedProps) {
     setCurrentSessionId(null);
     clearMessages();
     setSelectedDocument(null);
+    setVideoContext(null); // Clear video context for new chat
   }, [setCurrentSessionId, clearMessages]);
 
   const handleToolAction = useCallback(
