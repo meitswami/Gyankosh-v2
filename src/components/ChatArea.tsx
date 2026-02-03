@@ -6,6 +6,7 @@ import { FAQRenderer, isFAQContent } from '@/components/FAQRenderer';
 import { MarkdownRenderer } from '@/components/MarkdownRenderer';
 import { AISuggestions, parseAISuggestions } from '@/components/AISuggestions';
 import { MessageDocxExport } from '@/components/MessageDocxExport';
+import { YouTubePreview, extractYouTubeUrls } from '@/components/YouTubePreview';
 import type { ChatMessage } from '@/hooks/useChat';
 
 interface ChatAreaProps {
@@ -133,6 +134,14 @@ export function ChatArea({ messages, isLoading, hasDocuments = false, onSendMess
                 ) : (
                   <div className="whitespace-pre-wrap text-sm leading-relaxed">
                     {message.content}
+                    {/* Show YouTube preview for user messages with YouTube links */}
+                    {extractYouTubeUrls(message.content).map((url, i) => (
+                      <YouTubePreview 
+                        key={i} 
+                        url={url} 
+                        className="mt-3 max-w-sm"
+                      />
+                    ))}
                   </div>
                 )}
               </div>
