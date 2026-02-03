@@ -16,6 +16,7 @@ export interface Document {
   user_id: string | null;
   tags: string[] | null;
   category: string | null;
+  folder_id: string | null;
 }
 
 export function useDocuments() {
@@ -175,11 +176,34 @@ export function useDocuments() {
     };
   }, []);
 
+  const updateDocument = async (id: string, updates: Partial<Pick<Document, 'folder_id' | 'tags' | 'category' | 'alias'>>) => {
+    try {
+      const { error } = await supabase
+        .from('documents')
+        .update(updates)
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setDocuments(prev => prev.map(d => d.id === id ? { ...d, ...updates } : d));
+      return true;
+    } catch (error) {
+      console.error('Error updating document:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update document',
+        variant: 'destructive',
+      });
+      return false;
+    }
+  };
+
   return {
     documents,
     loading,
     uploadDocument,
     deleteDocument,
+    updateDocument,
     refetch: fetchDocuments,
   };
 }

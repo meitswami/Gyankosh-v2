@@ -18,6 +18,7 @@ import { useRecordings } from '@/hooks/useRecordings';
 import { useLiveTranscription, type TranscriptSegment } from '@/hooks/useLiveTranscription';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
+import { AudioWaveform, SimpleWaveform } from '@/components/AudioWaveform';
 
 interface LiveRecorderProps {
   onClose: () => void;
@@ -468,6 +469,22 @@ Format as JSON: { "summary": "...", "keyPoints": ["...", "..."] }`,
         {/* Recording in progress */}
         {(isRecording || recordingId) && (
           <>
+            {/* Waveform Visualization */}
+            {isRecording && (
+              <div className="rounded-lg border bg-muted/30 p-4">
+                {streamRef.current ? (
+                  <AudioWaveform
+                    stream={streamRef.current}
+                    isRecording={isRecording}
+                    isPaused={isPaused}
+                    className="h-16"
+                  />
+                ) : (
+                  <SimpleWaveform isRecording={isRecording} isPaused={isPaused} />
+                )}
+              </div>
+            )}
+
             {/* Timer and controls */}
             <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
               <div className="flex items-center gap-4">
