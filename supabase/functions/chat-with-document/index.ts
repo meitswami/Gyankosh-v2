@@ -244,10 +244,11 @@ Format as JSON array:
       // Rich formatting instructions for professional documents
       const formattingInstruction = `
 ## Response Format Guidelines:
-IMPORTANT: Answer naturally with sentences, paragraphs, and structured formatting. Do NOT generate FAQ format unless the user explicitly asks for FAQs.
+IMPORTANT: Answer naturally with sentences, paragraphs, and structured formatting. 
+NEVER generate FAQ format (Q: A: or numbered question-answer pairs) unless the user EXPLICITLY asks for "FAQ", "FAQs", "सवाल-जवाब", or "frequently asked questions".
 
 ### Standard Response Format (Default):
-- Use clear paragraphs with proper spacing
+- Write in clear, flowing paragraphs
 - Use **bold** for key terms and emphasis
 - Use *italics* for technical terms or citations
 - Use bullet points (- or *) for lists of items
@@ -270,27 +271,17 @@ IMPORTANT: Answer naturally with sentences, paragraphs, and structured formattin
 - Use proper paragraph breaks
 - End with appropriate closing and signature
 
-### ONLY Use FAQ Format When:
-The user explicitly asks for:
-- "Generate FAQs"
-- "Create FAQ"
-- "FAQ बनाओ"
-- "सवाल-जवाब बनाओ"
+### CRITICAL - Avoid These Unless Explicitly Requested:
+- Do NOT format answers as Q&A pairs
+- Do NOT use "Q:" or "A:" prefixes
+- Do NOT create numbered question lists
+- Do NOT add "FAQ" sections automatically
+- Keep responses conversational and direct
 
 ### Text Structure:
-- Use --- horizontal rules between major sections
 - Keep responses conversational yet informative
-- Answer directly first, then provide details
+- Answer directly first, then provide supporting details
 - Cite document sources when referencing specific content`;
-
-      const suggestionInstruction = `
-
-After your main answer, add 2-3 follow-up questions:
----
-**संबंधित प्रश्न / Related:**
-- [Question 1]
-- [Question 2]
-- [Question 3]`;
       
       if (!hasDocuments) {
         // General chat mode - no documents, like ChatGPT
@@ -314,7 +305,6 @@ Instructions:
 - If you don't know something, be honest about it
 - For Hindi text, always use proper Unicode Devanagari script
 ${formattingInstruction}
-${suggestionInstruction}
 
 Note: The user hasn't uploaded any documents yet. You're acting as a general AI assistant. If they want document-specific help, suggest they upload documents to the knowledge base.`;
       } else if (isGlobalSearch) {
@@ -333,8 +323,7 @@ Instructions:
 - Keep answers clear, well-structured, and fast to read
 - Use proper formatting for professional appearance
 - You can also help with translation, paraphrasing, and grammar if asked
-${formattingInstruction}
-${suggestionInstruction}`;
+${formattingInstruction}`;
       } else {
         systemPrompt = `You are ज्ञानकोष 2.0 (Gyaankosh 2.0), a helpful AI assistant specialized in answering questions from documents.
 You have access to the following document: "${documentName}"
@@ -350,8 +339,7 @@ Instructions:
 - Keep answers clear and concise
 - Use proper formatting for professional appearance
 - You can also help with translation, paraphrasing, and grammar if asked
-${formattingInstruction}
-${suggestionInstruction}`;
+${formattingInstruction}`;
       }
     }
 
