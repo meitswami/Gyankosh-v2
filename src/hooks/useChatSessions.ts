@@ -9,11 +9,29 @@ export interface ChatSession {
   user_id: string | null;
 }
 
+const LAST_SESSION_KEY = 'gyankosh_last_session_id';
+
 export function useChatSessions() {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [currentSessionId, setCurrentSessionIdState] = useState<string | null>(() => {
+    // Restore last session from localStorage on mount
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem(LAST_SESSION_KEY);
+    }
+    return null;
+  });
   const [loading, setLoading] = useState(true);
   const fetchedRef = useRef(false);
+
+  // Wrapper to persist session ID to localStorage
+  const setCurrentSessionId = useCallback((id: string | null) => {
+    setCurrentSessionIdState(id);
+    if (id) {
+      localStorage.setItem(LAST_SESSION_KEY, id);
+    } else {
+      localStorage.removeItem(LAST_SESSION_KEY);
+    }
+  }, []);
 
   // Fetch all sessions for the current user
   const fetchSessions = useCallback(async () => {
@@ -47,10 +65,16 @@ export function useChatSessions() {
       }
 
       setSessions(data || []);
+      
+      // Validate that the restored session still exists
+      if (currentSessionId && data && !data.find(s => s.id === currentSessionId)) {
+        // Session no longer exists, clear it
+        setCurrentSessionId(null);
+      }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentSessionId, setCurrentSessionId]);
 
   useEffect(() => {
     let mounted = true;
@@ -106,7 +130,7 @@ export function useChatSessions() {
     setSessions(prev => [data, ...prev]);
     setCurrentSessionId(data.id);
     return data;
-  }, []);
+  }, [setCurrentSessionId]);
 
   // Update session title
   const updateSessionTitle = useCallback(async (id: string, title: string) => {
@@ -141,7 +165,7 @@ export function useChatSessions() {
     if (currentSessionId === id) {
       setCurrentSessionId(null);
     }
-  }, [currentSessionId]);
+  }, [currentSessionId, setCurrentSessionId]);
 
   // Generate title from first message
   const generateTitle = useCallback((firstMessage: string) => {
