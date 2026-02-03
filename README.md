@@ -41,6 +41,17 @@
 - **🌐 Whole Document Translation**: Translate entire documents (PDF, DOCX, etc.) while preserving formatting, layout, and indentation. Download as Word (.docx) ready for copy-paste
 - **🎥 Video & Audio Understanding**: Advanced processing for multimedia content with transcription and AI analysis
 
+### 🎙️ Live Recording & Transcription
+- **📹 Video/Audio Recording**: Record directly in browser with pause/resume/stop controls
+- **🎯 Real-time CC Captions**: Live transcription with auto-language detection (Hindi, English, 10+ Indian dialects)
+- **👥 Speaker Diarization**: Automatic speaker detection (Speaker 1, Speaker 2, etc.) based on voice patterns
+- **🔊 Audio Amplification**: 2x voice boost for quiet speakers or distant voices
+- **📊 Live Waveform**: Real-time audio visualization during recording
+- **✏️ Transcript Editing**: Edit misheard words while preserving original transcript
+- **📝 Auto-Summarization**: AI-generated bullet points and key takeaways
+- **💬 Q&A from Recordings**: Ask questions about your recorded content
+- **💾 Dual Storage**: Save to cloud (Supabase) or local browser storage
+
 ### 💬 AI Chat & Smart Mentions
 - **🌐 Global Search**: Query across entire knowledge base
 - **@ User Mentions**: Reference friends in conversations
@@ -367,12 +378,100 @@ Only the admin user (test@genxai.com) can access the Admin tab in Settings:
 - **Group Key Encryption**: Per-group AES keys wrapped with RSA
 - **Audit Logs**: Complete activity tracking
 
+## 🎥 Video & Audio Features (Detailed)
+
+### How Video/Audio Understanding Works
+
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│  Upload/Record  │───▶│   Transcription  │───▶│   AI Analysis   │
+│  Video/Audio    │    │  (Multi-engine)  │    │  (Gemini/Local) │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+                              │
+                    ┌─────────┴─────────┐
+                    ▼                   ▼
+            ┌─────────────┐    ┌─────────────────┐
+            │ Web Speech  │    │ OpenAI Whisper  │
+            │ API (Live)  │    │ (Uploaded Files)│
+            └─────────────┘    └─────────────────┘
+```
+
+### Transcription Engines
+
+| Source | Engine | Languages | Speaker Detection |
+|--------|--------|-----------|-------------------|
+| **Live Recording** | Web Speech API | Hindi, English, 10+ Indian dialects | ✅ Pause-based |
+| **Uploaded Files** | OpenAI Whisper | 100+ languages | ✅ Voice-based |
+| **YouTube URLs** | YouTube Captions API | Auto-detected | ❌ |
+
+### Supported Languages & Dialects
+
+The system auto-detects and supports:
+- **Hindi** (हिंदी)
+- **English** (Indian accent optimized)
+- **Hinglish** (Mixed Hindi-English)
+- **Regional Languages**: Tamil, Telugu, Kannada, Malayalam, Marathi, Gujarati, Bengali, Punjabi, Odia
+
+### Live Recording Workflow
+
+1. **Start Recording**: Click the microphone/video button in header
+2. **Real-time Captions**: See live CC captions as you speak
+3. **Speaker Labels**: System detects speaker changes automatically
+   ```
+   Speaker 1: Hi, how are you?
+   Speaker 2: Bhai main theek hoon, tu bata?
+   Speaker 1: Sab badiya, meeting ke baare mein baat karte hain.
+   ```
+4. **Audio Boost**: Enable amplification for quiet voices
+5. **Stop & Save**: Choose cloud or local storage
+6. **Edit Transcript**: Fix any misheard words
+7. **AI Summary**: Auto-generate bullet points
+8. **Q&A**: Ask questions about the recording
+
+### Video/Audio Upload Workflow
+
+1. **Upload Media**: Drag & drop or click to upload (MP4, WebM, MP3, WAV, etc.)
+2. **Processing**: 
+   - Audio extraction (for video files)
+   - Whisper transcription with timestamps
+   - Speaker diarization
+3. **Segments**: View time-coded transcript with clickable timestamps
+4. **Interact**: Chat with AI about the media content
+   ```
+   User: What did Speaker 2 say about the project deadline?
+   AI: At 2:34, Speaker 2 mentioned "The deadline is next Friday, 
+       we need to complete the documentation by Wednesday."
+   ```
+
+### YouTube Integration
+
+1. **Paste URL**: Simply paste a YouTube link in chat
+2. **Auto-Detection**: System recognizes YouTube URLs automatically
+3. **Caption Fetch**: Retrieves available captions/subtitles
+4. **Fallback**: Uses Gemini for videos without captions
+5. **Q&A Ready**: Ask questions about the video content
+
+### Storage & Limits
+
+| Storage Type | Limit | Sync | Privacy |
+|--------------|-------|------|---------|
+| **Cloud (Supabase)** | 500MB | ✅ Cross-device | Encrypted at rest |
+| **Local (Browser)** | ~50MB | ❌ Device only | 100% private |
+
+### Audio Enhancement Features
+
+- **Voice Amplification**: 2x gain boost for quiet speakers
+- **Noise Handling**: Web Speech API has built-in noise reduction
+- **Real-time Waveform**: Visual feedback of audio levels
+- **Auto-pause Detection**: Identifies speaker changes
+
 ## 🆕 Recent Updates
 
 ### Version 2.0 - Video & Audio Understanding
 - **Advanced Video Processing**: Upload and analyze video content with AI-powered understanding
 - **Audio Transcription**: Automatic speech-to-text for audio files
 - **Multimedia Knowledge Base**: Include video and audio files in your document library
+- **Live Recording**: Record, transcribe, and analyze in real-time with speaker diarization
 
 ### Bug Fixes & Improvements
 - **Fixed Language Tools Loading Issue**: Resolved stuck loading state in Translate, Paraphrase, and Grammar functions. Added proper request cancellation, timeout handling, and resource cleanup to prevent memory leaks.
