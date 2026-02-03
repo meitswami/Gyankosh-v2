@@ -127,12 +127,15 @@ Type these triggers in the chat input:
 - **Frontend**: React 18, TypeScript, Vite
 - **Styling**: Tailwind CSS, shadcn/ui
 - **Backend**: Lovable Cloud (Supabase)
-- **AI**: Google Gemini 3 Flash, Multi-model adaptive
+- **AI**: Google Gemini 3 Flash, Multi-model adaptive, Ollama (offline)
 - **Database**: PostgreSQL with pgvector
 - **Encryption**: Web Crypto API (RSA-OAEP + AES-GCM)
 - **Real-time**: Supabase Realtime
+- **Offline AI**: Ollama (local LLM support)
 
 ## 🚀 Getting Started
+
+### Cloud Development (Recommended)
 
 ```sh
 # Clone and install
@@ -140,6 +143,163 @@ git clone <YOUR_GIT_URL>
 cd gyaankosh-2.0
 npm install
 npm run dev
+```
+
+### 🖥️ Local & Offline Setup
+
+For running completely offline with local Supabase and AI models:
+
+#### Prerequisites
+
+1. **Node.js 18+** and **npm/bun**
+2. **Docker Desktop** (for Supabase local)
+3. **Ollama** (for offline AI)
+
+#### Step 1: Install Supabase CLI
+
+```sh
+# macOS
+brew install supabase/tap/supabase
+
+# Windows (PowerShell)
+scoop bucket add supabase https://github.com/supabase/scoop-bucket.git
+scoop install supabase
+
+# Linux
+curl -fsSL https://raw.githubusercontent.com/supabase/supabase/master/scripts/install.sh | sh
+```
+
+#### Step 2: Start Supabase Locally
+
+```sh
+# Initialize Supabase (first time only)
+supabase init
+
+# Start local Supabase (Docker must be running)
+supabase start
+
+# This will output local credentials like:
+# API URL: http://localhost:54321
+# anon key: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+# service_role key: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+#### Step 3: Configure Environment
+
+Create a `.env.local` file:
+
+```env
+VITE_SUPABASE_URL=http://localhost:54321
+VITE_SUPABASE_PUBLISHABLE_KEY=<your-local-anon-key>
+VITE_SUPABASE_PROJECT_ID=local
+```
+
+#### Step 4: Run Database Migrations
+
+```sh
+# Apply all migrations to local database
+supabase db reset
+
+# Or apply specific migration
+supabase migration up
+```
+
+#### Step 5: Install & Run Ollama (Offline AI)
+
+```sh
+# macOS
+brew install ollama
+
+# Linux
+curl -fsSL https://ollama.com/install.sh | sh
+
+# Windows - Download from https://ollama.com/download
+```
+
+Start Ollama and pull a model:
+
+```sh
+# Start Ollama server
+ollama serve
+
+# Pull recommended models (in another terminal)
+ollama pull llama3.2          # General purpose (3B)
+ollama pull mistral           # Good for Hindi/English (7B)
+ollama pull gemma2            # Lightweight (2B)
+ollama pull qwen2.5           # Excellent multilingual (7B)
+```
+
+#### Step 6: Start the Application
+
+```sh
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
+```
+
+### 🤖 AI Models: Online vs Offline
+
+| Feature | Online (Lovable AI) | Offline (Ollama) |
+|---------|---------------------|------------------|
+| **Models** | Gemini 3 Flash, GPT-5 | Llama 3.2, Mistral, Qwen |
+| **Internet** | Required | Not required |
+| **Speed** | Fast (cloud) | Depends on hardware |
+| **Privacy** | Data sent to cloud | 100% local |
+| **Hindi Support** | Excellent | Good (Qwen, Mistral) |
+| **Cost** | Usage-based | Free |
+
+#### Switching to Offline Mode
+
+The app automatically detects Ollama at `http://localhost:11434`. To use offline AI:
+
+1. Ensure Ollama is running (`ollama serve`)
+2. The app will show available local models in settings
+3. Select your preferred model for chat
+
+#### Recommended Offline Models for Indian Languages
+
+| Model | Size | Hindi | Hinglish | Speed |
+|-------|------|-------|----------|-------|
+| `qwen2.5:7b` | 4.7GB | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ | Medium |
+| `mistral:7b` | 4.1GB | ⭐⭐⭐ | ⭐⭐⭐ | Medium |
+| `llama3.2:3b` | 2.0GB | ⭐⭐ | ⭐⭐⭐ | Fast |
+| `gemma2:2b` | 1.6GB | ⭐⭐ | ⭐⭐ | Very Fast |
+
+### 🔧 Local Development Commands
+
+```sh
+# Start local Supabase
+supabase start
+
+# Stop local Supabase
+supabase stop
+
+# View local Supabase dashboard
+# Open http://localhost:54323 in browser
+
+# Reset database (clears all data)
+supabase db reset
+
+# Generate TypeScript types from local schema
+supabase gen types typescript --local > src/integrations/supabase/types.ts
+
+# View Supabase logs
+supabase logs
+
+# Check Ollama status
+curl http://localhost:11434/api/tags
+```
+
+### 📁 Local Storage Buckets
+
+For file uploads to work locally, create storage buckets:
+
+```sql
+-- Run in Supabase Studio SQL editor (http://localhost:54323)
+INSERT INTO storage.buckets (id, name, public) VALUES ('documents', 'documents', false);
+INSERT INTO storage.buckets (id, name, public) VALUES ('media', 'media', false);
 ```
 
 ## 📖 Usage
