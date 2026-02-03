@@ -194,7 +194,7 @@ export function useChat() {
     });
   }, []);
 
-  const clearMessages = () => setMessages([]);
+  const clearMessages = useCallback(() => setMessages([]), []);
 
   return {
     messages,

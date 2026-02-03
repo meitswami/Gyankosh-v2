@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface ChatSession {
@@ -13,6 +13,7 @@ export function useChatSessions() {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const fetchedRef = useRef(false);
 
   // Fetch all sessions for the current user
   const fetchSessions = useCallback(async () => {
@@ -53,17 +54,22 @@ export function useChatSessions() {
         setSessions([]);
         setCurrentSessionId(null);
         setLoading(false);
+        fetchedRef.current = false;
       }
     });
 
-    // Initial load (prevents loading from getting stuck on refresh)
-    fetchSessions();
+    // Initial load (only once, prevents loading from getting stuck on refresh)
+    if (!fetchedRef.current) {
+      fetchedRef.current = true;
+      fetchSessions();
+    }
 
     return () => {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [fetchSessions]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Create new session with user_id
   const createSession = useCallback(async (title: string = 'New Chat') => {
