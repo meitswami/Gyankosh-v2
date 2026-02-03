@@ -384,13 +384,29 @@ const Index = () => {
         document_id: null,
       });
 
-      // Show processing message
-      setMessages(prev => [...prev, {
-        id: crypto.randomUUID(),
-        role: 'assistant' as const,
-        content: '🎥 Analyzing YouTube video... This may take a moment as I watch and transcribe the content.',
-        createdAt: new Date(),
-      }]);
+      // Show step-by-step processing messages (like document upload)
+      const updateProgress = (step: string) => {
+        setMessages(prev => {
+          const last = prev[prev.length - 1];
+          if (last?.role === 'assistant' && last.content.includes('🎥')) {
+            return [...prev.slice(0, -1), { ...last, content: step }];
+          }
+          return [...prev, {
+            id: crypto.randomUUID(),
+            role: 'assistant' as const,
+            content: step,
+            createdAt: new Date(),
+          }];
+        });
+      };
+
+      updateProgress('🎥 **Step 1/4:** Detecting video type...');
+      await new Promise(r => setTimeout(r, 300));
+      updateProgress('🎥 **Step 2/4:** Fetching video metadata (title, author, thumbnail)...');
+      await new Promise(r => setTimeout(r, 300));
+      updateProgress('🎥 **Step 3/4:** Extracting captions/transcript...');
+      await new Promise(r => setTimeout(r, 300));
+      updateProgress('🎥 **Step 4/4:** Analyzing content with AI...');
 
       try {
         const { data: { session } } = await supabase.auth.getSession();
